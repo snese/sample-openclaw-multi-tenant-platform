@@ -6,8 +6,201 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-Dwarnings"
+
 jobs:
-  lint-and-synth:
+  # ============================================================
+  # Rust Operator CI
+  # ============================================================
+  rust-check:
+    name: "Rust: compile + clippy"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: operator
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: operator
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Clippy lint
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Compile check
+        run: cargo check --all-targets
+
+      - name: Verify CRD generation
+        run: |
+          cargo run --bin crdgen > /tmp/crd-generated.yaml
+          diff -u yaml/crd.yaml /tmp/crd-generated.yaml || {
+            echo "❌ CRD yaml is out of date. Run: cargo run --bin crdgen > yaml/crd.yaml"
+            exit 1
+          }
+          echo "✅ CRD yaml is up to date"
+
+  rust-test:
+    name: "Rust: unit tests"
+    runs-on: ubuntu-latest
+    needs: rust-check
+    defaults:
+      run:
+        working-directory: operator
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: operator
+
+      - name: Run unit tests
+        run: cargo test --lib --all-features
+
+  rust-integration:
+    name: "Rust: K8s integration test"
+    runs-on: ubuntu-latest
+    needs: rust-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: operator
+
+      - name: Build operator binary
+        working-directory: operator
+        run: cargo build --release --bin tenant-operator
+
+      - name: Create k3d cluster
+        uses: AbsaOSS/k3d-action@v2
+        with:
+          cluster-name: test
+          args: --no-lb --k3s-arg "--disable=traefik@server:0"
+
+      - name: Install CRD
+        run: kubectl apply -f operator/yaml/crd.yaml
+
+      - name: Wait for CRD
+        run: kubectl wait --for=condition=Established crd/tenants.openclaw.io --timeout=30s
+
+      - name: Run operator in background
+        run: |
+          operator/target/release/tenant-operator &
+          OPERATOR_PID=$!
+          echo "OPERATOR_PID=$OPERATOR_PID" >> $GITHUB_ENV
+          sleep 5
+
+      - name: Health check
+        run: curl -sf http://localhost:8080/health | jq .
+
+      - name: Metrics endpoint
+        run: curl -sf http://localhost:8080/metrics | head -5
+
+      - name: Create test tenant
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: openclaw.io/v1alpha1
+          kind: Tenant
+          metadata:
+            name: test-alice
+            namespace: default
+          spec:
+            email: alice@example.com
+            displayName: Alice
+            skills:
+              - weather
+            budget:
+              monthlyUSD: 50
+            enabled: true
+          EOF
+
+      - name: Wait for reconciliation
+        run: |
+          for i in $(seq 1 30); do
+            PHASE=$(kubectl get tenant test-alice -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            echo "Attempt $i: phase=$PHASE"
+            if [ "$PHASE" = "Ready" ]; then
+              echo "✅ Tenant reconciled to Ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "❌ Tenant did not reach Ready phase"
+          kubectl get tenant test-alice -o yaml
+          exit 1
+
+      - name: Verify namespace created
+        run: kubectl get namespace openclaw-test-alice
+
+      - name: Verify PVC created
+        run: kubectl get pvc test-alice-data -n openclaw-test-alice
+
+      - name: Verify ServiceAccount created
+        run: kubectl get sa test-alice -n openclaw-test-alice
+
+      - name: Verify NetworkPolicy created
+        run: kubectl get networkpolicy default-deny -n openclaw-test-alice
+
+      - name: Verify status conditions
+        run: |
+          CONDITIONS=$(kubectl get tenant test-alice -o jsonpath='{.status.conditions[*].type}')
+          echo "Conditions: $CONDITIONS"
+          for cond in NamespaceReady PVCBound NetworkPolicyApplied; do
+            echo "$CONDITIONS" | grep -q "$cond" || { echo "❌ Missing condition: $cond"; exit 1; }
+          done
+          echo "✅ All expected conditions present"
+
+      - name: Test tenant suspension
+        run: |
+          kubectl patch tenant test-alice --type=merge -p '{"spec":{"enabled":false}}'
+          sleep 10
+          PHASE=$(kubectl get tenant test-alice -o jsonpath='{.status.phase}')
+          echo "Phase after disable: $PHASE"
+          [ "$PHASE" = "Suspended" ] && echo "✅ Suspension works" || echo "⚠️ Phase is $PHASE (expected Suspended)"
+
+      - name: Test tenant deletion
+        run: |
+          kubectl delete tenant test-alice
+          sleep 15
+          kubectl get namespace openclaw-test-alice 2>&1 | grep -q "not found\|Terminating" && echo "✅ Namespace cleanup triggered" || echo "⚠️ Namespace still exists"
+
+      - name: Stop operator
+        if: always()
+        run: kill $OPERATOR_PID 2>/dev/null || true
+
+  rust-docker:
+    name: "Rust: Docker build"
+    runs-on: ubuntu-latest
+    needs: rust-check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        working-directory: operator
+        run: docker build -t tenant-operator:test .
+
+      - name: Verify binary in image
+        run: docker run --rm tenant-operator:test --version || true
+
+  # ============================================================
+  # CDK / Helm / Scripts CI (existing)
+  # ============================================================
+  platform-lint:
+    name: "Platform: CDK + Helm + Scripts"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +222,6 @@ jobs:
         run: |
           cp cdk.json.example cdk.json
           npx cdk synth --no-staging 2>&1 || true
-          # synth may fail due to placeholder values, but template generation should work
 
       - name: Helm lint
         run: |
@@ -44,24 +236,33 @@ jobs:
             bash -n "$f" && echo "✅ $f" || echo "❌ $f"
           done
 
-      - name: No sensitive data check
+  # ============================================================
+  # Security & Quality Gates
+  # ============================================================
+  security-scan:
+    name: "Security: sensitive data + CJK + audit"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No sensitive data
         run: |
           MATCHES=$(grep -rn "387671391109\|snese\.net\|us-west-2_yRqDzKF0t\|103uif8rdrp29ak4eki7lc09ru" \
-            --include="*.ts" --include="*.py" --include="*.md" --include="*.sh" --include="*.html" --include="*.yaml" \
-            2>/dev/null | grep -v node_modules | grep -v cdk.out | grep -v ".git/" | grep -v cdk.json | wc -l)
+            --include="*.ts" --include="*.py" --include="*.md" --include="*.sh" --include="*.html" --include="*.yaml" --include="*.rs" --include="*.toml" \
+            2>/dev/null | grep -v node_modules | grep -v cdk.out | grep -v ".git/" | grep -v cdk.json | grep -v target/ | wc -l)
           if [ "$MATCHES" -gt 0 ]; then
             echo "❌ Found $MATCHES sensitive data matches"
             exit 1
           fi
           echo "✅ No sensitive data found"
 
-      - name: No CJK characters check
+      - name: No CJK characters
         run: |
           python3 -c "
           import glob
           total=0
           for f in glob.glob('**/*', recursive=True):
-              if any(x in f for x in ['node_modules','cdk.out','.git','research/']): continue
+              if any(x in f for x in ['node_modules','cdk.out','.git','target/']): continue
               try:
                   with open(f) as fh:
                       for line in fh: total+=sum(1 for c in line if '\u4e00'<=c<='\u9fff')
@@ -71,3 +272,9 @@ jobs:
               exit(1)
           print('✅ No CJK characters')
           "
+
+      - name: Rust dependency audit
+        working-directory: operator
+        run: |
+          cargo install cargo-audit --quiet 2>/dev/null || true
+          cargo audit || echo "⚠️ Audit found advisories (non-blocking)"

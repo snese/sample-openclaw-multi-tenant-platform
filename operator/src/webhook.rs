@@ -21,22 +21,21 @@ fn validate_tenant(req: &AdmissionRequest<DynamicObject>) -> AdmissionResponse {
     let mut errors: Vec<String> = Vec::new();
 
     // Validate tenant name
-    if let Some(name) = obj.metadata.name.as_deref() {
-        if name.len() > 63
+    if let Some(name) = obj.metadata.name.as_deref()
+        && (name.len() > 63
             || name.is_empty()
             || !name
                 .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-        {
-            errors.push("name must be lowercase alphanumeric/hyphens, 1-63 chars".into());
-        }
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'))
+    {
+        errors.push("name must be lowercase alphanumeric/hyphens, 1-63 chars".into());
     }
 
     // Validate email contains @
-    if let Some(email) = spec.get("email").and_then(|e: &Value| e.as_str()) {
-        if !email.contains('@') {
-            errors.push("email must contain @".into());
-        }
+    if let Some(email) = spec.get("email").and_then(|e: &Value| e.as_str())
+        && !email.contains('@')
+    {
+        errors.push("email must contain @".into());
     }
 
     // Validate budget.monthlyUSD > 0 if set
@@ -44,19 +43,15 @@ fn validate_tenant(req: &AdmissionRequest<DynamicObject>) -> AdmissionResponse {
         .get("budget")
         .and_then(|b: &Value| b.get("monthlyUSD"))
         .and_then(|m: &Value| m.as_i64())
+        && monthly <= 0
     {
-        if monthly <= 0 {
-            errors.push("budget.monthlyUSD must be > 0".into());
-        }
+        errors.push("budget.monthlyUSD must be > 0".into());
     }
 
     // Validate skills: alphanumeric + hyphens only
     if let Some(skills) = spec.get("skills").and_then(|s: &Value| s.as_array()) {
         for s in skills.iter().filter_map(|v: &Value| v.as_str()) {
-            if !s
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'-')
-            {
+            if !s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
                 errors.push(format!("skill '{s}' must be alphanumeric/hyphens only"));
             }
         }
@@ -70,9 +65,7 @@ fn validate_tenant(req: &AdmissionRequest<DynamicObject>) -> AdmissionResponse {
 }
 
 #[post("/validate-tenant")]
-pub async fn validate_tenant_handler(
-    body: Json<AdmissionReview<DynamicObject>>,
-) -> HttpResponse {
+pub async fn validate_tenant_handler(body: Json<AdmissionReview<DynamicObject>>) -> HttpResponse {
     let req: AdmissionRequest<DynamicObject> = match body.into_inner().try_into() {
         Ok(r) => r,
         Err(e) => return HttpResponse::BadRequest().body(format!("invalid review: {e}")),
