@@ -1,6 +1,6 @@
 use crate::{Error, Metrics, Result};
 use futures::StreamExt;
-use k8s_openapi::api::core::v1::{Namespace, PersistentVolumeClaim, ServiceAccount};
+use k8s_openapi::api::core::v1::{ConfigMap, Namespace, PersistentVolumeClaim, ServiceAccount};
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 
 use kube::{
@@ -233,7 +233,85 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
         .map_err(Error::KubeError)?;
     info!("Ensured NetworkPolicy default-deny in {tenant_ns}");
 
-    // 5. Update status
+    // 5. Helm release: create values ConfigMap and run helm upgrade --install
+    let helm_values = serde_yaml::to_string(&json!({
+        "tenant": {
+            "name": &name,
+            "email": &tenant.spec.email,
+            "skills": &tenant.spec.skills,
+            "budget": tenant.spec.budget.as_ref().map(|b| b.monthly_usd).unwrap_or(100),
+            "enabled": tenant.spec.enabled,
+        }
+    }))
+    .map_err(|e| Error::HelmError(e.to_string()))?;
+
+    let cm_api: Api<ConfigMap> = Api::namespaced(client.clone(), tenant_ns);
+    let cm_patch: serde_json::Value = json!({
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {
+            "name": format!("{name}-helm-values"),
+            "namespace": tenant_ns,
+            "labels": {
+                "openclaw.io/tenant": name,
+                "app.kubernetes.io/managed-by": "tenant-operator"
+            }
+        },
+        "data": {
+            "values.yaml": helm_values
+        }
+    });
+    cm_api
+        .patch(&format!("{name}-helm-values"), &ssapply, &Patch::Apply(cm_patch))
+        .await
+        .map_err(Error::KubeError)?;
+    info!("Ensured Helm values ConfigMap {name}-helm-values in {tenant_ns}");
+
+    let mut helm_child = tokio::process::Command::new("helm")
+        .args([
+            "upgrade",
+            "--install",
+            &name,
+            "openclaw/openclaw",
+            "--namespace",
+            tenant_ns,
+            "--values",
+            "/dev/stdin",
+            "--wait",
+            "--timeout",
+            "5m",
+        ])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| Error::HelmError(format!("Failed to spawn helm: {e}")))?;
+
+    // Write values to stdin
+    if let Some(mut stdin) = helm_child.stdin.take() {
+        use tokio::io::AsyncWriteExt;
+        stdin
+            .write_all(helm_values.as_bytes())
+            .await
+            .map_err(|e| Error::HelmError(format!("Failed to write helm values: {e}")))?;
+        drop(stdin);
+    }
+
+    let output = helm_child
+        .wait_with_output()
+        .await
+        .map_err(|e| Error::HelmError(format!("Helm process error: {e}")))?;
+
+    let helm_condition = if output.status.success() {
+        info!("Helm release {name} deployed in {tenant_ns}");
+        json!({ "type": "HelmReleaseReady", "status": "True" })
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        warn!("Helm release {name} failed: {stderr}");
+        json!({ "type": "HelmReleaseReady", "status": "False", "message": stderr.to_string() })
+    };
+
+    // 6. Update status
     let status = json!({
         "apiVersion": "openclaw.io/v1alpha1",
         "kind": "Tenant",
@@ -242,7 +320,8 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
             "conditions": [
                 { "type": "NamespaceReady", "status": "True" },
                 { "type": "PVCBound", "status": "True" },
-                { "type": "NetworkPolicyApplied", "status": "True" }
+                { "type": "NetworkPolicyApplied", "status": "True" },
+                helm_condition
             ]
         }
     });

@@ -1,5 +1,5 @@
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, get, web::Data};
-use tenant_operator::{State, controller, telemetry};
+use tenant_operator::{State, controller, telemetry, webhook};
 use tracing::*;
 
 #[get("/health")]
@@ -37,6 +37,7 @@ async fn main() -> anyhow::Result<()> {
             .service(health)
             .service(metrics)
             .service(index)
+            .service(webhook::validate_tenant_handler)
     })
     .bind("0.0.0.0:8080")?
     .shutdown_timeout(5);

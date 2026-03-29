@@ -13,6 +13,9 @@ pub enum Error {
 
     #[error("Missing namespace on tenant {0}")]
     MissingNamespace(String),
+
+    #[error("Helm error: {0}")]
+    HelmError(String),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -30,3 +33,5 @@ pub mod metrics;
 pub use metrics::Metrics;
 
 pub mod telemetry;
+
+pub mod webhook;
