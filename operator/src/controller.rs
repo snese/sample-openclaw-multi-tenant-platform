@@ -109,6 +109,19 @@ pub struct Context {
 async fn reconcile(tenant: Arc<Tenant>, ctx: Arc<Context>) -> Result<Action> {
     let _timer = ctx.metrics.reconcile_count.clone();
     let name = tenant.name_any();
+
+    // Server-side validation (defense in depth — webhook may be bypassed)
+    if name.is_empty()
+        || name.len() > 63
+        || !name
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    {
+        return Err(Error::ValidationError(format!(
+            "Invalid tenant name: {name}"
+        )));
+    }
+
     let tenant_ns = format!("openclaw-{name}");
 
     info!("Reconciling Tenant \"{name}\"");
@@ -139,7 +152,10 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
             name: Some(tenant_ns.to_string()),
             labels: Some(BTreeMap::from([
                 ("openclaw.io/tenant".to_string(), name.clone()),
-                ("app.kubernetes.io/managed-by".to_string(), "tenant-operator".to_string()),
+                (
+                    "app.kubernetes.io/managed-by".to_string(),
+                    "tenant-operator".to_string(),
+                ),
             ])),
             ..Default::default()
         },
@@ -262,7 +278,11 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
         }
     });
     cm_api
-        .patch(&format!("{name}-helm-values"), &ssapply, &Patch::Apply(cm_patch))
+        .patch(
+            &format!("{name}-helm-values"),
+            &ssapply,
+            &Patch::Apply(cm_patch),
+        )
         .await
         .map_err(Error::KubeError)?;
     info!("Ensured Helm values ConfigMap {name}-helm-values in {tenant_ns}");
@@ -316,8 +336,7 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
         &kube::api::GroupVersionKind::gvk("http.keda.sh", "v1alpha1", "HTTPScaledObject"),
         "httpscaledobjects",
     );
-    let hso_api: Api<DynamicObject> =
-        Api::namespaced_with(client.clone(), tenant_ns, &hso_ar);
+    let hso_api: Api<DynamicObject> = Api::namespaced_with(client.clone(), tenant_ns, &hso_ar);
     let hso_name = format!("{name}-hso");
     let hso_patch: serde_json::Value = json!({
         "apiVersion": "http.keda.sh/v1alpha1",
@@ -364,7 +383,7 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
             "phase": if tenant.spec.enabled { "Ready" } else { "Suspended" },
             "conditions": [
                 { "type": "NamespaceReady", "status": "True" },
-                { "type": "PVCBound", "status": "True" },
+                { "type": "PVCBound", "status": "Unknown", "message": "Pending verification" },
                 { "type": "NetworkPolicyApplied", "status": "True" },
                 helm_condition,
                 keda_condition
@@ -407,7 +426,12 @@ async fn cleanup(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Res
     // Delete namespace (cascades all resources inside)
     // PVC retention is handled by StorageClass reclaimPolicy
     let ns_api: Api<Namespace> = Api::all(client.clone());
-    if ns_api.get_opt(tenant_ns).await.map_err(Error::KubeError)?.is_some() {
+    if ns_api
+        .get_opt(tenant_ns)
+        .await
+        .map_err(Error::KubeError)?
+        .is_some()
+    {
         ns_api
             .delete(tenant_ns, &Default::default())
             .await
@@ -469,7 +493,8 @@ impl State {
     pub fn metrics(&self) -> String {
         let mut buffer = String::new();
         let registry = &*self.metrics.registry;
-        prometheus_client::encoding::text::encode(&mut buffer, registry).unwrap();
+        prometheus_client::encoding::text::encode(&mut buffer, registry)
+            .unwrap_or_else(|e| tracing::error!("Failed to encode metrics: {:?}", e));
         buffer
     }
 

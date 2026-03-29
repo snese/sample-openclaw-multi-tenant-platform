@@ -31,11 +31,14 @@ fn validate_tenant(req: &AdmissionRequest<DynamicObject>) -> AdmissionResponse {
         errors.push("name must be lowercase alphanumeric/hyphens, 1-63 chars".into());
     }
 
-    // Validate email contains @
+    // Validate email format
     if let Some(email) = spec.get("email").and_then(|e: &Value| e.as_str())
-        && !email.contains('@')
+        && (!email.contains('@')
+            || email.len() > 254
+            || email.contains('\n')
+            || email.contains('\0'))
     {
-        errors.push("email must contain @".into());
+        errors.push("email must be valid format (max 254 chars, no control characters)".into());
     }
 
     // Validate budget.monthlyUSD > 0 if set

@@ -41,7 +41,10 @@ mod tests {
         let existing = json!({"keep": "me", "also": "here"});
         let operator = json!({"new": "value"});
         let result = merge_config(&operator, &existing);
-        assert_eq!(result, json!({"keep": "me", "also": "here", "new": "value"}));
+        assert_eq!(
+            result,
+            json!({"keep": "me", "also": "here", "new": "value"})
+        );
     }
 
     #[test]
@@ -49,7 +52,10 @@ mod tests {
         let existing = json!({"nested": {"a": 1, "b": 2}, "top": "val"});
         let operator = json!({"nested": {"b": 99, "c": 3}});
         let result = merge_config(&operator, &existing);
-        assert_eq!(result, json!({"nested": {"a": 1, "b": 99, "c": 3}, "top": "val"}));
+        assert_eq!(
+            result,
+            json!({"nested": {"a": 1, "b": 99, "c": 3}, "top": "val"})
+        );
     }
 
     #[test]

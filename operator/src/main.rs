@@ -43,6 +43,13 @@ async fn main() -> anyhow::Result<()> {
     .shutdown_timeout(5);
 
     // Run controller and web server concurrently
-    tokio::join!(controller, async { server.run().await.unwrap() });
+    tokio::select! {
+        _ = controller => {},
+        result = server.run() => {
+            if let Err(e) = result {
+                error!("Web server failed: {}", e);
+            }
+        }
+    };
     Ok(())
 }

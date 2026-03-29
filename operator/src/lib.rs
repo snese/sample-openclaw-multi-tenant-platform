@@ -16,6 +16,9 @@ pub enum Error {
 
     #[error("Helm error: {0}")]
     HelmError(String),
+
+    #[error("Validation error: {0}")]
+    ValidationError(String),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
