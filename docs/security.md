@@ -8,18 +8,25 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  1. Edge         CloudFront + WAF (Common Rules + rate limit)          │
+│  1. Edge    †    CloudFront + WAF (Common Rules + rate limit)          │
 │  2. Signup       Turnstile CAPTCHA + email domain restriction          │
 │  3. Network      Internal ALB + VPC private subnets + NetworkPolicy    │
-│  4. Auth         Cognito OIDC + ALB trusted-proxy + session cookies    │
+│  4. Auth    †    Cognito OIDC + ALB trusted-proxy + session cookies    │
 │  5. Tenant       Namespace isolation + ABAC + ResourceQuota            │
 │  6. Secrets      exec SecretRef — on-demand fetch, never persisted     │
 │  7. LLM          Bedrock via Pod Identity — zero API keys              │
 │  8. Cost         Per-tenant budget enforcement + daily Lambda scan     │
-│  9. Data         PVC persistence + daily EBS snapshots + 7d retention  │
-│ 10. Audit        CloudTrail → S3 → Athena (Bedrock-specific trail)    │
+│  9. Data    †    PVC persistence + daily EBS snapshots + 7d retention  │
+│ 10. Audit   †    CloudTrail → S3 → Athena (Bedrock-specific trail)    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **†** = Sample-mode defaults. See [Production Hardening Checklist](production-checklist.md) for what to change before production.
+>
+> - **Layer 1**: Rate limit is 2000 req/5min/IP — may need tuning for production traffic patterns
+> - **Layer 4**: Local auth mode (gateway token only), no ALB-level auth — add origin verify header for production
+> - **Layer 9**: Default EBS encryption, no customer-managed KMS keys
+> - **Layer 10**: No WAF logging, no VPC Flow Logs
 
 ---
 
