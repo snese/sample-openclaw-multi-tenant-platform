@@ -35,5 +35,3 @@ prometheus-client = "0.24"
 anyhow = "1.0.102"
 serde_yaml = "0.9.34"
 
-[dev-dependencies]
-envtest = "0.1"

@@ -5,7 +5,7 @@ use k8s_openapi::api::networking::v1::NetworkPolicy;
 
 use kube::{
     CustomResource, Resource, ResourceExt,
-    api::{Api, ListParams, ObjectMeta, Patch, PatchParams},
+    api::{Api, ApiResource, DynamicObject, ListParams, ObjectMeta, Patch, PatchParams},
     client::Client,
     runtime::{
         controller::{Action, Controller},
@@ -311,7 +311,52 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
         json!({ "type": "HelmReleaseReady", "status": "False", "message": stderr.to_string() })
     };
 
-    // 6. Update status
+    // 6. Ensure KEDA HTTPScaledObject (scale-to-zero after 15m idle, max 1 replica)
+    let hso_ar = ApiResource::from_gvk_with_plural(
+        &kube::api::GroupVersionKind::gvk("http.keda.sh", "v1alpha1", "HTTPScaledObject"),
+        "httpscaledobjects",
+    );
+    let hso_api: Api<DynamicObject> =
+        Api::namespaced_with(client.clone(), tenant_ns, &hso_ar);
+    let hso_name = format!("{name}-hso");
+    let hso_patch: serde_json::Value = json!({
+        "apiVersion": "http.keda.sh/v1alpha1",
+        "kind": "HTTPScaledObject",
+        "metadata": {
+            "name": &hso_name,
+            "namespace": tenant_ns,
+            "labels": {
+                "openclaw.io/tenant": name,
+                "app.kubernetes.io/managed-by": "tenant-operator"
+            }
+        },
+        "spec": {
+            "hosts": [format!("{name}.openclaw.io")],
+            "targetPendingRequests": 1,
+            "scaledownPeriod": 900,
+            "replicas": { "min": 0, "max": 1 },
+            "scaleTargetRef": {
+                "name": name,
+                "kind": "Deployment",
+                "apiVersion": "apps/v1"
+            }
+        }
+    });
+    let keda_condition = match hso_api
+        .patch(&hso_name, &ssapply, &Patch::Apply(hso_patch))
+        .await
+    {
+        Ok(_) => {
+            info!("Ensured HTTPScaledObject {hso_name} in {tenant_ns}");
+            json!({ "type": "KEDAReady", "status": "True" })
+        }
+        Err(e) => {
+            warn!("HTTPScaledObject {hso_name} failed: {e}");
+            json!({ "type": "KEDAReady", "status": "False", "message": e.to_string() })
+        }
+    };
+
+    // 7. Update status
     let status = json!({
         "apiVersion": "openclaw.io/v1alpha1",
         "kind": "Tenant",
@@ -321,7 +366,8 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
                 { "type": "NamespaceReady", "status": "True" },
                 { "type": "PVCBound", "status": "True" },
                 { "type": "NetworkPolicyApplied", "status": "True" },
-                helm_condition
+                helm_condition,
+                keda_condition
             ]
         }
     });
