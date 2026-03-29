@@ -33,6 +33,17 @@ echo "  → Attaching WAF to ALB"
 aws wafv2 associate-web-acl --web-acl-arn "$WAF_ARN" --resource-arn "$ALB_ARN" --region "$REGION" 2>/dev/null || true
 echo "  ✅ WAF attached"
 
+# 2b. Origin verify secret (prevents VPC-internal bypass of CloudFront)
+ORIGIN_SECRET_NAME="openclaw/origin-verify-secret"
+ORIGIN_SECRET=$(aws secretsmanager get-secret-value --secret-id "$ORIGIN_SECRET_NAME" --region "$REGION" --query SecretString --output text 2>/dev/null || echo "")
+if [ -z "$ORIGIN_SECRET" ]; then
+  ORIGIN_SECRET=$(openssl rand -hex 32)
+  aws secretsmanager create-secret --name "$ORIGIN_SECRET_NAME" --secret-string "$ORIGIN_SECRET" --region "$REGION" > /dev/null
+  echo "  ✅ Origin verify secret created"
+else
+  echo "  ✅ Origin verify secret exists"
+fi
+
 # 3. Create or find VPC Origin
 VPC_ORIGIN_ID=$(aws cloudfront list-vpc-origins --query "VpcOriginList.Items[?VpcOriginEndpointConfig.Arn=='${ALB_ARN}'].Id" --output text 2>/dev/null)
 if [ -z "$VPC_ORIGIN_ID" ]; then
@@ -79,7 +90,7 @@ if [ -z "$TENANT_CF_ID" ]; then
   "Aliases": {"Quantity": 1, "Items": ["*.${DOMAIN}"]},
   "DefaultRootObject": "",
   "Origins": {"Quantity": 2, "Items": [
-    {"Id": "alb", "DomainName": "${ALB_DNS}", "VpcOriginConfig": {"VpcOriginId": "${VPC_ORIGIN_ID}", "OriginKeepaliveTimeout": 5, "OriginReadTimeout": 60}, "CustomHeaders": {"Quantity": 0}, "OriginShield": {"Enabled": false}, "ConnectionAttempts": 3, "ConnectionTimeout": 10},
+    {"Id": "alb", "DomainName": "${ALB_DNS}", "VpcOriginConfig": {"VpcOriginId": "${VPC_ORIGIN_ID}", "OriginKeepaliveTimeout": 5, "OriginReadTimeout": 60}, "CustomHeaders": {"Quantity": 1, "Items": [{"HeaderName": "x-origin-verify", "HeaderValue": "${ORIGIN_SECRET}"}]}, "OriginShield": {"Enabled": false}, "ConnectionAttempts": 3, "ConnectionTimeout": 10},
     {"Id": "error-pages", "DomainName": "${ERROR_BUCKET}.s3.${REGION}.amazonaws.com", "S3OriginConfig": {"OriginAccessIdentity": ""}, "CustomHeaders": {"Quantity": 0}, "OriginShield": {"Enabled": false}, "ConnectionAttempts": 3, "ConnectionTimeout": 10, "OriginAccessControlId": "${OAC_ID}"}
   ]},
   "DefaultCacheBehavior": {"TargetOriginId": "alb", "ViewerProtocolPolicy": "redirect-to-https", "AllowedMethods": {"Quantity": 7, "Items": ["GET","HEAD","OPTIONS","PUT","POST","PATCH","DELETE"], "CachedMethods": {"Quantity": 2, "Items": ["GET","HEAD"]}}, "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad", "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3", "Compress": true},
@@ -125,6 +136,33 @@ aws route53 change-resource-record-sets --hosted-zone-id "$ZONE_ID" --change-bat
   }}]
 }" > /dev/null
 echo "  ✅ Route53 updated"
+
+# 7. ALB listener rule: reject requests without valid x-origin-verify header
+LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn "$ALB_ARN" --region "$REGION" \
+  --query "Listeners[?Port==\`443\`].ListenerArn" --output text 2>/dev/null)
+if [ -z "$LISTENER_ARN" ]; then
+  LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn "$ALB_ARN" --region "$REGION" \
+    --query "Listeners[0].ListenerArn" --output text)
+fi
+
+if [ -n "$LISTENER_ARN" ]; then
+  # Check if rule already exists
+  EXISTING_RULE=$(aws elbv2 describe-rules --listener-arn "$LISTENER_ARN" --region "$REGION" \
+    --query "Rules[?Priority=='1'].RuleArn" --output text 2>/dev/null)
+  if [ -z "$EXISTING_RULE" ]; then
+    echo "  → Adding ALB listener rule: reject missing x-origin-verify"
+    aws elbv2 create-rule --listener-arn "$LISTENER_ARN" --region "$REGION" \
+      --priority 1 \
+      --conditions '[{"Field":"http-header","HttpHeaderConfig":{"HttpHeaderName":"x-origin-verify","Values":["'"$ORIGIN_SECRET"'"]}}]' \
+      --actions '[{"Type":"forward","TargetGroupArn":"'"$(aws elbv2 describe-rules --listener-arn "$LISTENER_ARN" --region "$REGION" --query "Rules[?IsDefault].Actions[0].TargetGroupArn" --output text)"'"}]' > /dev/null
+    # Change default action to fixed 403
+    aws elbv2 modify-listener --listener-arn "$LISTENER_ARN" --region "$REGION" \
+      --default-actions '[{"Type":"fixed-response","FixedResponseConfig":{"StatusCode":"403","ContentType":"text/plain","MessageBody":"Forbidden"}}]' > /dev/null
+    echo "  ✅ ALB origin verify rule added (direct ALB access returns 403)"
+  else
+    echo "  ✅ ALB origin verify rule exists"
+  fi
+fi
 
 echo ""
 echo "=== Post-deploy complete ==="
