@@ -302,7 +302,7 @@ These are known gaps — not yet implemented or intentionally deferred:
 | Pod Security Standards | Not enforced | No `PodSecurity` admission controller configured. Currently relies on Helm template defaults. |
 | Image signing / verification | Not implemented | No Sigstore/Cosign verification on container images. |
 | Secrets rotation | Not implemented | Secrets Manager secrets are not auto-rotated. |
-| WAF logging | Not enabled | WAF sampled requests enabled but full logging to S3/CloudWatch not configured. |
+| WAF logging | Enabled | CloudWatch Logs (`aws-waf-logs-openclaw`), 30-day retention |
 | VPC Flow Logs | Not enabled | No VPC Flow Logs for network forensics. |
 | GuardDuty | Not enabled | No runtime threat detection for EKS. |
 | KMS encryption | Default | EBS uses default encryption. No customer-managed KMS keys for S3 or Secrets Manager. |

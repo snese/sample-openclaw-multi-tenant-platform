@@ -9,6 +9,7 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as cw_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -591,6 +592,25 @@ export class EksClusterStack extends cdk.Stack {
             sampledRequestsEnabled: true,
           },
         },
+      ],
+    });
+
+    // WAF logging → CloudWatch Logs (prefix must be aws-waf-logs-)
+    const wafLogGroup = new logs.LogGroup(this, 'WafLogGroup', {
+      logGroupName: 'aws-waf-logs-openclaw',
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    new wafv2.CfnLoggingConfiguration(this, 'WafLogging', {
+      resourceArn: wafAcl.attrArn,
+      logDestinationConfigs: [
+        cdk.Stack.of(this).formatArn({
+          service: 'logs',
+          resource: 'log-group',
+          resourceName: wafLogGroup.logGroupName,
+          arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
+        }),
       ],
     });
 
