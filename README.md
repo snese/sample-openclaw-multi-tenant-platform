@@ -235,6 +235,7 @@ export OPENCLAW_TENANT_ROLE_ARN=$(aws cloudformation describe-stacks \
 Path-based routing via Gateway API: `claw.snese.net/t/<tenant>/` — one domain, one ALB, no wildcard DNS needed.
 - [System Architecture](docs/architecture.md)
 - [Security Deep Dive](docs/security.md)
+- [Production Hardening Checklist](docs/production-checklist.md) — what to address before running in production
 
 ### Components
 Learn how each component works:
