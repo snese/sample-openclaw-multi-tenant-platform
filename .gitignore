@@ -13,3 +13,4 @@ helm/tenants/values-*.yaml
 cdk/cdk.json
 logos/
 operator/target/
+__pycache__/

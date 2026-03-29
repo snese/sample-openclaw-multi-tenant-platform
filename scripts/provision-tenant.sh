@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Called by CodeBuild to provision a new tenant.
-# Env vars: TENANT_NAME, DOMAIN, CERTIFICATE_ARN, COGNITO_POOL_ID, COGNITO_CLIENT_ID, COGNITO_DOMAIN, REGION, CHART_BUCKET
+# Env vars: TENANT_NAME, DOMAIN, CERTIFICATE_ARN, COGNITO_POOL_ID, ALB_CLIENT_ID, COGNITO_DOMAIN, REGION, CHART_BUCKET
 
 TENANT="$TENANT_NAME"
 NS="openclaw-${TENANT}"
@@ -34,18 +34,13 @@ with open('/tmp/values-template.yaml') as f:
     content = f.read()
 for k, v in subs.items():
     content = content.replace(k, v)
-# Handle SKILLS_YAML (multi-line)
 content = content.replace('{{SKILLS_YAML}}', '  - weather\n  - gog')
 with open('/tmp/values.yaml', 'w') as f:
     f.write(content)
 PYEOF
 
-echo "==> Generated values.yaml"
-cat /tmp/values.yaml
-
-# Add Cognito callback URL
+# Add Cognito callback URL for this tenant's path
 echo "==> Adding Cognito callback URL"
-NEW_CB="https://${TENANT}.${DOMAIN}/oauth2/idpresponse"
 python3 << CBEOF
 import json, subprocess
 result = subprocess.run(
@@ -54,7 +49,7 @@ result = subprocess.run(
      '--region', '${REGION}', '--query', 'UserPoolClient.CallbackURLs', '--output', 'json'],
     capture_output=True, text=True)
 urls = json.loads(result.stdout)
-new_cb = '${NEW_CB}'
+new_cb = 'https://${DOMAIN}/t/${TENANT}/oauth2/idpresponse'
 if new_cb not in urls:
     urls.append(new_cb)
     subprocess.run(
@@ -70,10 +65,9 @@ else:
     print(f'  Already exists: {new_cb}')
 CBEOF
 
-echo "==> Helm install"
+echo "==> Helm upgrade --install"
 helm upgrade --install "${RELEASE}" /tmp/chart.tgz \
   --namespace "${NS}" --create-namespace \
-  -f /tmp/values.yaml \
-  
+  -f /tmp/values.yaml
 
 echo "==> Done: ${TENANT}"
