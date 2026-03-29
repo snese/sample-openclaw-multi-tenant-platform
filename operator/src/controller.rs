@@ -1,6 +1,6 @@
 use crate::{Error, Metrics, Result};
 use futures::StreamExt;
-use k8s_openapi::api::core::v1::{ConfigMap, Namespace, PersistentVolumeClaim, ServiceAccount};
+use k8s_openapi::api::core::v1::{Namespace, PersistentVolumeClaim, ServiceAccount};
 
 use kube::{
     CustomResource, Resource, ResourceExt,
@@ -223,7 +223,7 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
     // 4. NetworkPolicy — managed by Helm chart via ArgoCD, not operator
 
     // 5. ArgoCD Application — delegates Helm chart deployment to ArgoCD
-    let gateway_domain = std::env::var("GATEWAY_DOMAIN").unwrap_or_default();
+    let _gateway_domain = std::env::var("GATEWAY_DOMAIN").unwrap_or_default();
     let cognito_pool_arn = require_env("COGNITO_POOL_ARN")?;
     let cognito_client_id = require_env("COGNITO_CLIENT_ID")?;
     let cognito_domain = require_env("COGNITO_DOMAIN")?;
