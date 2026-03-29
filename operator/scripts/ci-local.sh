@@ -63,9 +63,10 @@ fi
 
 # ── Security checks ─────────────────────────────────────────
 step "Sensitive data scan"
-MATCHES=$(grep -rl "387671391109" "$OP_DIR/src/" 2>/dev/null || true)
-if [ -n "$MATCHES" ]; then
-  fail "Found sensitive data in: $MATCHES"
+# Pattern-based: look for AWS access key patterns, not literal values
+SECRETS=$(grep -rn 'AKIA[A-Z0-9]\{16\}' "$OP_DIR/src/" 2>/dev/null || true)
+if [ -n "$SECRETS" ]; then
+  fail "Found hardcoded AWS keys in: $SECRETS"
 fi
 pass "No sensitive data"
 
