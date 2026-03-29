@@ -1,16 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
-echo '==> Step 1: CDK Deploy'
+
+STEP=""
+trap 'if [ -n "$STEP" ]; then echo "❌ Failed at: $STEP" >&2; fi' ERR
+
+STEP="CDK Deploy"
+echo "==> Step 1: $STEP"
 cd cdk && npm ci && npx cdk deploy OpenClawEksStack --require-approval broadening && cd ..
-echo '==> Step 2: Setup Cognito'
+
+STEP="Setup Cognito"
+echo "==> Step 2: $STEP"
 bash scripts/setup-cognito.sh
-echo '==> Step 3: Deploy Auth UI'
+
+STEP="Deploy Auth UI"
+echo "==> Step 3: $STEP"
 bash scripts/deploy-auth-ui.sh
-echo '==> Step 4: Upload Helm Chart'
+
+STEP="Upload Helm Chart"
+echo "==> Step 4: $STEP"
 bash scripts/upload-helm-chart.sh
-echo '==> Step 5: Deploy Gateway API'
+
+STEP="Deploy Gateway API"
+echo "==> Step 5: $STEP"
 kubectl apply -f helm/gateway.yaml
-echo '==> Step 6: Install CRD + Operator'
+
+STEP="Install CRD + Operator"
+echo "==> Step 6: $STEP"
 kubectl apply -f operator/yaml/crd.yaml
 kubectl apply -f operator/yaml/deployment.yaml
-echo '==> Done! Visit https://'"$(cd cdk && node -e "console.log(require('./cdk.json').context.zoneName)")"''
+
+STEP=""
+echo "==> Done! Visit https://$(cd cdk && node -e "console.log(require('./cdk.json').context.zoneName)")"

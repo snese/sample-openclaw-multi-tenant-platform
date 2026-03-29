@@ -11,7 +11,7 @@
 │  1. Edge         CloudFront + WAF (Common Rules + rate limit)          │
 │  2. Signup       Turnstile CAPTCHA + email domain restriction          │
 │  3. Network      Internal ALB + VPC private subnets + NetworkPolicy    │
-│  4. Auth         Cognito OIDC + ALB trusted-proxy + session cookies    │
+│  4. Auth         Cognito signup/login + gateway token (local auth mode)  │
 │  5. Tenant       Namespace isolation + ABAC + ResourceQuota            │
 │  6. Secrets      exec SecretRef — on-demand fetch, never persisted     │
 │  7. LLM          Bedrock via Pod Identity — zero API keys              │
@@ -31,7 +31,7 @@
 - CloudFront distribution terminates TLS at edge (ACM cert in us-east-1)
 - WAF WebACL (REGIONAL scope) attached to ALB with two rules:
   - `AWSManagedRulesCommonRuleSet` — OWASP Top 10 coverage (SQLi, XSS, path traversal, etc.)
-  - `RateLimit` — 2000 requests per 5 minutes per IP, then block
+  - `RateLimit` — 500 requests per 5 minutes per IP, then block
 
 **CDK reference**: `cdk/lib/eks-cluster-stack.ts` → `WafAcl` (CfnWebACL)
 
@@ -100,20 +100,24 @@ The `10.0.0.0/8` exception in HTTPS egress blocks cross-tenant pod traffic over 
 **What it does**: Ensures every request is authenticated before reaching a pod.
 
 **How it's configured**:
-- Cognito User Pool with per-tenant user assignment
-- ALB authenticates via OIDC before forwarding (Cognito integration)
-- Session cookie: `AWSELBAuthSessionCookie` with configurable timeout (default: 7 days)
-- Pod runs in `trusted-proxy` mode — trusts `x-amzn-oidc-identity` header from ALB
-- Required headers: `x-amzn-oidc-data` (JWT) validated by ALB
-- Trusted proxies restricted to `10.0.0.0/8` (VPC CIDR range)
+- Cognito User Pool for signup/login — issues JWT tokens
+- Pod runs in `local` auth mode — validates gateway token directly (no ALB-level auth)
+- Traffic path: Internet → CloudFront → Internal ALB (no auth) → Pod (token auth)
+- Each tenant has a unique gateway token stored in Secrets Manager
+- Network-level protection: Internal ALB is only reachable via CloudFront VPC Origin
+
+**Security considerations**:
+- CloudFront → ALB path has no per-request authentication at the ALB layer
+- Protection relies on: (1) ALB is internal/not internet-facing, (2) CloudFront VPC Origin restricts access
+- **Recommended hardening**: Add `x-origin-verify` custom header in CloudFront, validate in ALB listener rule to prevent VPC-internal bypass
 
 **CDK reference**: `cdk/lib/eks-cluster-stack.ts` → `UserPool` (imported)
 
-**Helm reference**: `helm/charts/openclaw-platform/values.yaml` → `config.gateway.auth`
+**Helm reference**: `helm/charts/openclaw-platform/values.yaml` → `config.gateway.auth.mode: local`
 
-**Helm template**: `helm/charts/openclaw-platform/templates/ingress.yaml` → Cognito annotations
+**Attacks mitigated**: Unauthenticated access (gateway token required), external network access (internal ALB + VPC Origin)
 
-**Attacks mitigated**: Unauthenticated access, session hijacking (cookie-based with ALB validation), header spoofing (trusted-proxy only accepts from VPC CIDR)
+**Known gap**: VPC-internal actors could bypass CloudFront and reach ALB directly. Mitigate with origin verify header or restore ALB Cognito auth for production.
 
 ---
 
@@ -259,10 +263,10 @@ ORDER BY eventtime DESC LIMIT 20;
 
 | Attack Vector | Mitigation |
 |---------------|------------|
-| DDoS | CloudFront edge caching + WAF rate limiting (2000 req/5min/IP) |
+| DDoS | CloudFront edge caching + WAF rate limiting (500 req/5min/IP) |
 | SQLi / XSS | WAF AWSManagedRulesCommonRuleSet |
 | Bot signups | Cloudflare Turnstile CAPTCHA + email domain allowlist |
-| Unauthenticated access | ALB Cognito OIDC — no request reaches pod without valid session |
+| Unauthenticated access | Internal ALB (VPC Origin only) + per-tenant gateway token (local auth mode) |
 | Cross-tenant data access | Namespace isolation + NetworkPolicy + ABAC on Secrets Manager |
 | Cross-tenant network | NetworkPolicy blocks 10.0.0.0/8 on egress port 443 |
 | API key leakage | Zero API keys — all access via Pod Identity + STS temporary credentials |
@@ -279,13 +283,16 @@ ORDER BY eventtime DESC LIMIT 20;
 ```
 Internet ──► CloudFront ──► WAF ──► VPC Origin ──► Internal ALB ──► Pod
    │              │           │                         │            │
-   │         TLS termination  │                    Cognito OIDC  NetworkPolicy
-   │         Edge caching     │                    Session cookie  ABAC
-   │                     Rate limit                                exec deny
-   │                     Common Rules                              fs: workspaceOnly
+   │         TLS termination  │                    No ALB auth    Gateway token
+   │         Edge caching     │                    (internal only)  NetworkPolicy
+   │                     Rate limit                                ABAC
+   │                     Common Rules                              exec deny
+   │                                                               fs: workspaceOnly
    │
    └──► Cognito ──► Pre-signup Lambda ──► Turnstile + domain check
-                    Post-confirm Lambda ──► SM + Pod Identity + Helm
+                    Post-confirm Lambda ──► SM + Pod Identity
+
+⚠️  Recommended: Add x-origin-verify header (CloudFront → ALB) to close VPC-internal bypass
 ```
 
 ---

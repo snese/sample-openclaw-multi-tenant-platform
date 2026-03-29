@@ -581,7 +581,7 @@ export class EksClusterStack extends cdk.Stack {
           action: { block: {} },
           statement: {
             rateBasedStatement: {
-              limit: 2000,
+              limit: 500,
               aggregateKeyType: 'IP',
             },
           },
