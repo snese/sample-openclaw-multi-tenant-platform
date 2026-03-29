@@ -92,9 +92,9 @@ pub struct TenantCondition {
     pub message: Option<String>,
 }
 
-/// Helper to require an environment variable, returning HelmError if missing
+/// Helper to require an environment variable
 fn require_env(key: &str) -> Result<String> {
-    std::env::var(key).map_err(|_| Error::HelmError(format!("{key} not set")))
+    std::env::var(key).map_err(|_| Error::ConfigError(format!("{key} not set")))
 }
 
 // --- Reconciler Context ---
@@ -249,7 +249,7 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
             }
         }
     }))
-    .map_err(|e| Error::HelmError(e.to_string()))?;
+    .map_err(|e| Error::ConfigError(format!("helm values serialization: {e}")))?;
 
     let app_ar = ApiResource::from_gvk_with_plural(
         &kube::api::GroupVersionKind::gvk("argoproj.io", "v1alpha1", "Application"),

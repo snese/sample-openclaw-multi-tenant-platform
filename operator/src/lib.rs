@@ -14,8 +14,8 @@ pub enum Error {
     #[error("Missing namespace on tenant {0}")]
     MissingNamespace(String),
 
-    #[error("Helm error: {0}")]
-    HelmError(String),
+    #[error("Config error: {0}")]
+    ConfigError(String),
 
     #[error("Validation error: {0}")]
     ValidationError(String),
