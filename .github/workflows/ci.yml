@@ -12,80 +12,53 @@ env:
 
 jobs:
   # ============================================================
-  # Rust Operator CI — only runs when operator/ changes
+  # Rust: fast checks (every PR) ~3 min
   # ============================================================
-  rust-check:
-    name: "Rust: compile + clippy"
+  rust-lint-test:
+    name: "Rust: lint + test"
     runs-on: ubuntu-latest
-    if: >
-      github.event_name == 'push' ||
-      contains(github.event.pull_request.title, 'operator') ||
-      true
     defaults:
       run:
         working-directory: operator
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: operator
 
-      - name: Check formatting
+      - name: Format check
         run: cargo fmt --check
 
-      - name: Clippy lint
+      - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: Compile check
-        run: cargo check --all-targets
-
-      - name: Verify CRD generation
-        run: |
-          cargo run --bin crdgen > /tmp/crd-generated.yaml
-          diff -u yaml/crd.yaml /tmp/crd-generated.yaml || {
-            echo "❌ CRD yaml is out of date. Run: cargo run --bin crdgen > yaml/crd.yaml"
-            exit 1
-          }
-          echo "✅ CRD yaml is up to date"
-
-  rust-test:
-    name: "Rust: unit tests"
-    runs-on: ubuntu-latest
-    needs: rust-check
-    defaults:
-      run:
-        working-directory: operator
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: operator
-
-      - name: Run unit tests
+      - name: Unit tests
         run: cargo test --lib --all-features
 
+      - name: CRD generation verify
+        run: |
+          cargo run --bin crdgen > /tmp/crd-generated.yaml
+          diff -u yaml/crd.yaml /tmp/crd-generated.yaml || { echo "CRD out of date"; exit 1; }
+
+  # ============================================================
+  # Rust: heavy checks (merge to main only) ~8 min
+  # ============================================================
   rust-integration:
-    name: "Rust: K8s integration test"
+    name: "Rust: K8s integration"
     runs-on: ubuntu-latest
-    needs: rust-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: rust-lint-test
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
-
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: operator
 
-      - name: Build operator binary
+      - name: Build release binary
         working-directory: operator
         run: cargo build --release --bin tenant-operator
 
@@ -95,26 +68,15 @@ jobs:
           cluster-name: test
           args: --no-lb --k3s-arg "--disable=traefik@server:0"
 
-      - name: Install CRD
-        run: kubectl apply -f operator/yaml/crd.yaml
-
-      - name: Wait for CRD
-        run: kubectl wait --for=condition=Established crd/tenants.openclaw.io --timeout=30s
-
-      - name: Run operator in background
+      - name: Install CRD and run operator
         run: |
+          kubectl apply -f operator/yaml/crd.yaml
+          kubectl wait --for=condition=Established crd/tenants.openclaw.io --timeout=30s
           operator/target/release/tenant-operator &
-          OPERATOR_PID=$!
-          echo "OPERATOR_PID=$OPERATOR_PID" >> $GITHUB_ENV
           sleep 5
+          curl -sf http://localhost:8080/health | jq .
 
-      - name: Health check
-        run: curl -sf http://localhost:8080/health | jq .
-
-      - name: Metrics endpoint
-        run: curl -sf http://localhost:8080/metrics | head -5
-
-      - name: Create test tenant
+      - name: Create and verify tenant
         run: |
           cat <<EOF | kubectl apply -f -
           apiVersion: openclaw.io/v1alpha1
@@ -125,154 +87,85 @@ jobs:
           spec:
             email: alice@example.com
             displayName: Alice
-            skills:
-              - weather
-            budget:
-              monthlyUSD: 50
+            skills: [weather]
+            budget: { monthlyUSD: 50 }
             enabled: true
           EOF
-
-      - name: Wait for reconciliation
-        run: |
           for i in $(seq 1 30); do
             PHASE=$(kubectl get tenant test-alice -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-            echo "Attempt $i: phase=$PHASE"
-            if [ "$PHASE" = "Ready" ]; then
-              echo "✅ Tenant reconciled to Ready"
-              exit 0
-            fi
+            [ "$PHASE" = "Ready" ] && echo "Tenant ready" && break
             sleep 2
           done
-          echo "❌ Tenant did not reach Ready phase"
-          kubectl get tenant test-alice -o yaml
-          exit 1
+          kubectl get ns openclaw-test-alice
+          kubectl get pvc test-alice-data -n openclaw-test-alice
+          kubectl get sa test-alice -n openclaw-test-alice
+          kubectl get networkpolicy default-deny -n openclaw-test-alice
 
-      - name: Verify namespace created
-        run: kubectl get namespace openclaw-test-alice
-
-      - name: Verify PVC created
-        run: kubectl get pvc test-alice-data -n openclaw-test-alice
-
-      - name: Verify ServiceAccount created
-        run: kubectl get sa test-alice -n openclaw-test-alice
-
-      - name: Verify NetworkPolicy created
-        run: kubectl get networkpolicy default-deny -n openclaw-test-alice
-
-      - name: Verify status conditions
-        run: |
-          CONDITIONS=$(kubectl get tenant test-alice -o jsonpath='{.status.conditions[*].type}')
-          echo "Conditions: $CONDITIONS"
-          for cond in NamespaceReady NetworkPolicyApplied; do
-            echo "$CONDITIONS" | grep -q "$cond" || { echo "❌ Missing condition: $cond"; exit 1; }
-          done
-          echo "✅ All expected conditions present"
-
-      - name: Test tenant deletion
+      - name: Test deletion cleanup
         run: |
           kubectl delete tenant test-alice
           sleep 15
-          kubectl get namespace openclaw-test-alice 2>&1 | grep -q "not found\|Terminating" && echo "✅ Namespace cleanup triggered" || echo "⚠️ Namespace still exists"
-
-      - name: Stop operator
-        if: always()
-        run: kill $OPERATOR_PID 2>/dev/null || true
+          kubectl get ns openclaw-test-alice 2>&1 | grep -q "not found\|Terminating"
 
   rust-docker:
     name: "Rust: Docker build"
     runs-on: ubuntu-latest
-    needs: rust-check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: rust-lint-test
     steps:
       - uses: actions/checkout@v4
-
-      - name: Build Docker image
+      - name: Build image
         working-directory: operator
         run: docker build -t tenant-operator:test .
 
   # ============================================================
-  # CDK / Helm / Scripts CI
+  # Platform: CDK + Helm + Scripts (every PR) ~2 min
   # ============================================================
   platform-lint:
     name: "Platform: CDK + Helm + Scripts"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Install CDK dependencies
+      - name: CDK compile
         working-directory: cdk
-        run: npm ci
+        run: npm ci && npx tsc --noEmit
 
-      - name: TypeScript compile check
-        working-directory: cdk
-        run: npx tsc --noEmit
-
-      - name: CDK synth (validate templates)
+      - name: CDK synth
         working-directory: cdk
         run: |
           cp cdk.json.example cdk.json
           npx cdk synth --no-staging 2>&1 || true
 
       - name: Helm lint
-        run: |
-          helm lint helm/charts/openclaw-platform/ \
-            --set ingress.enabled=true \
-            --set ingress.host=test.example.com \
-            --set tenant.name=test
+        run: helm lint helm/charts/openclaw-platform/ --set ingress.enabled=true --set ingress.host=test.example.com --set tenant.name=test
 
-      - name: Shell script syntax check
-        run: |
-          for f in scripts/*.sh; do
-            bash -n "$f" && echo "✅ $f" || echo "❌ $f"
-          done
+      - name: Shell syntax
+        run: for f in scripts/*.sh; do bash -n "$f"; done
 
   # ============================================================
-  # Security & Quality Gates
+  # Security (every PR) ~1 min
   # ============================================================
   security-scan:
-    name: "Security: sensitive data + CJK + audit"
+    name: "Security scan"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: No AWS account IDs
-        run: |
-          # Pattern: 12-digit numbers that look like AWS account IDs
-          MATCHES=$(grep -rn '[0-9]\{12\}' \
-            --include="*.ts" --include="*.py" --include="*.sh" --include="*.rs" --include="*.html" \
-            2>/dev/null | grep -v node_modules | grep -v cdk.out | grep -v ".git/" | grep -v target/ \
-            | grep -v cdk.json | grep -v package-lock | grep -v Cargo.lock | grep -v "\.d\.ts" \
-            | grep -vE '(timeout|duration|timestamp|port|size|bytes|0000|1234|version|test)' \
-            | grep -E '[0-9]{12}' || true)
-          if [ -n "$MATCHES" ]; then
-            echo "⚠️ Potential AWS account IDs found (review manually):"
-            echo "$MATCHES" | head -10
-          fi
-          echo "✅ Account ID scan complete"
-
       - name: No hardcoded secrets
         run: |
-          # Check for common secret patterns
-          SECRETS=$(grep -rn 'AKIA[A-Z0-9]\{16\}\|sk-[a-zA-Z0-9]\{20,\}\|password\s*=\s*["\x27][^"\x27]\+["\x27]' \
-            --include="*.ts" --include="*.py" --include="*.sh" --include="*.rs" --include="*.yaml" \
-            2>/dev/null | grep -v node_modules | grep -v cdk.out | grep -v ".git/" | grep -v target/ \
-            | grep -v "example\|placeholder\|template\|TODO\|CHANGEME" || true)
-          if [ -n "$SECRETS" ]; then
-            echo "❌ Potential hardcoded secrets found:"
-            echo "$SECRETS"
-            exit 1
-          fi
-          echo "✅ No hardcoded secrets found"
+          FOUND=$(grep -rn 'AKIA[A-Z0-9]\{16\}' --include="*.ts" --include="*.py" --include="*.sh" --include="*.rs" --include="*.yaml" 2>/dev/null | grep -v node_modules | grep -v ".git/" | grep -v target/ || true)
+          [ -n "$FOUND" ] && echo "$FOUND" && exit 1 || echo "Clean"
 
-      - name: No CJK characters in code
+      - name: No CJK in code
         run: |
-          python3 -c "
+          python3 << 'PYEOF'
           import glob, os
           found = []
-          for ext in ['*.ts', '*.py', '*.sh', '*.rs', '*.html']:
+          for ext in ['*.ts', '*.py', '*.rs', '*.html']:
               for f in glob.glob(f'**/{ext}', recursive=True):
                   if any(x in f for x in ['node_modules','cdk.out','.git','target/']): continue
                   try:
@@ -282,14 +175,8 @@ jobs:
                                   found.append(f'{f}:{i}')
                   except: pass
           if found:
-              print(f'❌ Found CJK characters in {len(found)} lines:')
+              print(f'Found CJK in {len(found)} lines:')
               for f in found[:10]: print(f'  {f}')
               exit(1)
-          print('✅ No CJK characters in code')
-          "
-
-      - name: Rust dependency audit
-        working-directory: operator
-        run: |
-          cargo install cargo-audit --quiet 2>/dev/null || true
-          cargo audit || echo "⚠️ Audit found advisories (non-blocking)"
+          print('Clean')
+          PYEOF

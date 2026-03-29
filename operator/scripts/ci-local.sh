@@ -71,7 +71,8 @@ fi
 pass "No sensitive data"
 
 step "CJK character scan"
-CJK_FILES=$(grep -rl '[一-龥]' "$OP_DIR/src/" 2>/dev/null || true)
+# Use hex escape to avoid embedding CJK in this script
+CJK_FILES=$(grep -rl "$(printf '[\xe4\xb8\x80-\xe9\xbe\xa5]')" "$OP_DIR/src/" 2>/dev/null || true)
 if [ -n "$CJK_FILES" ]; then
   fail "Found CJK characters in: $CJK_FILES"
 fi
