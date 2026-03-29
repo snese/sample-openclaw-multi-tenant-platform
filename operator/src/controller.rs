@@ -92,6 +92,11 @@ pub struct TenantCondition {
     pub message: Option<String>,
 }
 
+/// Helper to require an environment variable, returning HelmError if missing
+fn require_env(key: &str) -> Result<String> {
+    std::env::var(key).map_err(|_| Error::HelmError(format!("{key} not set")))
+}
+
 // --- Reconciler Context ---
 
 #[derive(Clone)]
@@ -219,10 +224,10 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
 
     // 5. ArgoCD Application — delegates Helm chart deployment to ArgoCD
     let gateway_domain = std::env::var("GATEWAY_DOMAIN").unwrap_or_default();
-    let cognito_pool_arn = std::env::var("COGNITO_POOL_ARN").unwrap_or_default();
-    let cognito_client_id = std::env::var("COGNITO_CLIENT_ID").unwrap_or_default();
-    let cognito_domain = std::env::var("COGNITO_DOMAIN").unwrap_or_default();
-    let chart_repo = std::env::var("CHART_REPO").unwrap_or_default();
+    let cognito_pool_arn = require_env("COGNITO_POOL_ARN")?;
+    let cognito_client_id = require_env("COGNITO_CLIENT_ID")?;
+    let cognito_domain = require_env("COGNITO_DOMAIN")?;
+    let chart_repo = require_env("CHART_REPO")?;
     let chart_version = std::env::var("CHART_VERSION").unwrap_or_else(|_| "1.3.14".into());
 
     let helm_values = serde_yaml::to_string(&json!({
