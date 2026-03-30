@@ -22,6 +22,11 @@ spec:
       initContainers:
       - name: init-config
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
         resources:
           limits:
             cpu: 500m
@@ -45,6 +50,11 @@ spec:
       
       - name: init-skills
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
         resources:
           limits:
             cpu: "1"
@@ -76,6 +86,11 @@ spec:
 
       - name: init-tools
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
         resources:
           limits:
             cpu: "1"
@@ -114,6 +129,11 @@ spec:
       - name: main
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
         command:
         - node
         - dist/index.js

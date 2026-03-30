@@ -42,6 +42,12 @@ spec:
           containers:
             - name: updater
               image: bitnami/kubectl:latest
+              securityContext:
+                runAsNonRoot: true
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
               env:
                 # Set by setup-image-update.sh or manually before applying
                 - name: ECR_REPO

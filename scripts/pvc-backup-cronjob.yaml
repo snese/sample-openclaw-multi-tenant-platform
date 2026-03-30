@@ -49,6 +49,15 @@ spec:
           containers:
             - name: backup
               image: amazon/aws-cli:latest
+              securityContext:
+                runAsNonRoot: true
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+              - name: tmp
+                mountPath: /tmp
               command: ["sh", "-c"]
               args:
                 - |
@@ -58,7 +67,8 @@ spec:
 
                   # Install kubectl
                   curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                  install kubectl /usr/local/bin/kubectl && rm kubectl
+                  install kubectl /tmp/kubectl && rm kubectl
+                  export PATH="/tmp:$PATH"
 
                   # Get all openclaw PVCs
                   PVCS=$(kubectl get pvc -A -l app.kubernetes.io/name=openclaw-helm -o json)
@@ -101,3 +111,6 @@ spec:
                     aws ec2 delete-snapshot --region "$REGION" --snapshot-id "$SNAP_ID"
                   done
                   echo "Done"
+          volumes:
+          - name: tmp
+            emptyDir: {}
