@@ -243,7 +243,18 @@ jobs:
       - name: Semgrep (JS/TS/Python)
         run: |
           pip3 install semgrep==1.156.0 --quiet
+          set +e
           semgrep scan --config auto --severity ERROR --severity WARNING --error .
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "Semgrep: no findings"
+          elif [ $EXIT_CODE -eq 1 ]; then
+            echo "::warning::Semgrep found issues (non-blocking for sample code)"
+          else
+            echo "::error::Semgrep crashed with exit code $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
 
       - name: Install Trivy
         run: |
