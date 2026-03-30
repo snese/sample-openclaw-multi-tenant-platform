@@ -243,16 +243,21 @@ jobs:
       - name: Semgrep (JS/TS/Python)
         run: |
           pip3 install semgrep==1.156.0 --quiet
-          semgrep scan --config auto --severity ERROR --severity WARNING . 2>&1 || echo "::warning::Semgrep scan failed or found issues"
+          semgrep scan --config auto --severity ERROR --severity WARNING --error .
 
-      - name: Trivy config scan (Dockerfile, Helm, K8s YAML)
+      - name: Install Trivy
         run: |
           TRIVY_VERSION="0.69.3"
-          curl -sfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar xzf - -C /usr/local/bin trivy
-          trivy config --severity HIGH,CRITICAL --exit-code 0 . 2>&1
+          TRIVY_SHA256="1816b632dfe529869c740c0913e36bd1629cb7688bd5634f4a858c1d57c88b75"
+          curl -sfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -o /tmp/trivy.tar.gz
+          echo "${TRIVY_SHA256}  /tmp/trivy.tar.gz" | sha256sum -c -
+          tar xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
+
+      - name: Trivy config scan (Dockerfile, Helm, K8s YAML)
+        run: trivy config --severity HIGH,CRITICAL --exit-code 0 .
 
       - name: Trivy filesystem scan (dependencies)
-        run: trivy fs --severity HIGH,CRITICAL --exit-code 0 . 2>&1
+        run: trivy fs --severity HIGH,CRITICAL --exit-code 0 .
 
   # ============================================================
   # CodeQL — DISABLED
