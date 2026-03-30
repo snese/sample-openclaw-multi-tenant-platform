@@ -46,7 +46,10 @@ spec:
               args:
                 - |
                   set -e
-                  REPO="ghcr.io/openclaw/openclaw"
+                  # ECR pull-through cache path — mirrors ghcr.io/openclaw/openclaw
+                  ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                  REGION=$(aws configure get region || echo "us-west-2")
+                  REPO="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/ghcr/openclaw/openclaw"
                   
                   # Get current image from any openclaw deployment
                   CURRENT=$(kubectl get deploy -A -l app.kubernetes.io/name=openclaw-helm \
