@@ -158,6 +158,7 @@ jobs:
         working-directory: cdk
         run: |
           cp cdk.json.example cdk.json
+          set -o pipefail
           npx cdk synth --no-staging 2>&1 | tee /tmp/synth.log
           if grep -q "Error:" /tmp/synth.log; then exit 1; fi
 
