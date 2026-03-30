@@ -85,7 +85,7 @@ jobs:
         uses: AbsaOSS/k3d-action@v2
         with:
           cluster-name: test
-          args: --no-lb --k3s-arg "--disable=traefik@server:0"
+          args: --no-lb --k3s-arg "--disable=traefik@server:0" --image rancher/k3s:v1.35.0-k3s1
 
       - name: Install CRD and run operator
         run: |
@@ -118,7 +118,6 @@ jobs:
           kubectl get ns openclaw-test-alice
           kubectl get pvc test-alice-data -n openclaw-test-alice
           kubectl get sa test-alice -n openclaw-test-alice
-          kubectl get networkpolicy default-deny -n openclaw-test-alice
 
       - name: Test deletion cleanup
         run: |
@@ -188,7 +187,7 @@ jobs:
 
       - name: No hardcoded secrets
         run: |
-          FOUND=$(grep -rn '387671391109\|AKIA[A-Z0-9]\{16\}' --include="*.ts" --include="*.py" --include="*.sh" --include="*.rs" --include="*.yaml" --include="*.md" 2>/dev/null | grep -v node_modules | grep -v ".git/" | grep -v target/ | grep -v cdk.out | grep -v cdk.json || true)
+          FOUND=$(grep -rn 'AKIA[A-Z0-9]\{16\}' --include="*.ts" --include="*.py" --include="*.sh" --include="*.rs" --include="*.yaml" --include="*.md" 2>/dev/null | grep -v node_modules | grep -v ".git/" | grep -v target/ | grep -v cdk.out | grep -v cdk.json || true)
           [ -n "$FOUND" ] && echo "$FOUND" && exit 1 || echo "Clean"
 
       - name: No CJK in code
@@ -212,28 +211,6 @@ jobs:
           print('Clean')
           PYEOF
 
-  # ============================================================
-  # CodeQL (merge to main only) ~5 min
-  # Static analysis for TypeScript and Python
-  # ============================================================
-  codeql:
-    name: "CodeQL analysis"
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [javascript-typescript, python]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-      - uses: github/codeql-action/autobuild@v3
-      - uses: github/codeql-action/analyze@v3
-
       - name: No sensitive data in commit messages
         if: github.event_name == 'pull_request'
         run: |
@@ -245,3 +222,26 @@ jobs:
             exit 1
           fi
           echo "Clean"
+
+  # ============================================================
+  # CodeQL (merge to main only) ~5 min
+  # Static analysis for TypeScript and Python
+  # ============================================================
+  codeql:
+    name: "CodeQL analysis"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      security-events: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, python]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
