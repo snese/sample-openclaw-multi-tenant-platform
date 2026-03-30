@@ -272,8 +272,8 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
 
     // 4. Ensure ConfigMap (openclaw.json + bash_aliases + fetch-secret.mjs)
     let gateway_domain = std::env::var("GATEWAY_DOMAIN").unwrap_or_default();
-    let openclaw_image =
-        std::env::var("OPENCLAW_IMAGE").unwrap_or_else(|_| "ghcr.io/openclaw/openclaw:latest".into());
+    let openclaw_image = std::env::var("OPENCLAW_IMAGE")
+        .unwrap_or_else(|_| "ghcr.io/openclaw/openclaw:latest".into());
 
     let base_path = format!("/t/{name}");
     let allowed_origin = if gateway_domain.is_empty() {
@@ -404,14 +404,24 @@ process.stdout.write(JSON.stringify(result));
         format!("{img_repo}:{img_tag}")
     };
 
-    let (req_cpu, req_mem) = match tenant.spec.resources.as_ref().and_then(|r| r.requests.as_ref()) {
+    let (req_cpu, req_mem) = match tenant
+        .spec
+        .resources
+        .as_ref()
+        .and_then(|r| r.requests.as_ref())
+    {
         Some(r) => (
             r.cpu.as_deref().unwrap_or("200m"),
             r.memory.as_deref().unwrap_or("512Mi"),
         ),
         None => ("200m", "512Mi"),
     };
-    let (lim_cpu, lim_mem) = match tenant.spec.resources.as_ref().and_then(|r| r.limits.as_ref()) {
+    let (lim_cpu, lim_mem) = match tenant
+        .spec
+        .resources
+        .as_ref()
+        .and_then(|r| r.limits.as_ref())
+    {
         Some(r) => (
             r.cpu.as_deref().unwrap_or("2"),
             r.memory.as_deref().unwrap_or("2Gi"),
@@ -419,12 +429,24 @@ process.stdout.write(JSON.stringify(result));
         None => ("2", "2Gi"),
     };
 
-    // Build skill install commands for init-skills
+    // Build skill install commands for init-skills (validate names to prevent shell injection)
+    for s in &tenant.spec.skills {
+        if !s
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        {
+            return Err(Error::ValidationError(format!("Invalid skill name: {s}")));
+        }
+    }
     let skill_cmds = tenant
         .spec
         .skills
         .iter()
-        .map(|s| format!("if [ ! -d \"skills/{s}\" ]; then npx -y clawhub install \"{s}\" --no-input || true; fi"))
+        .map(|s| {
+            format!(
+                "if [ ! -d \"skills/{s}\" ]; then npx -y clawhub install \"{s}\" --no-input || true; fi"
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n          ");
     let init_skills_script = format!(
@@ -665,7 +687,10 @@ process.stdout.write(JSON.stringify(result));
             ]
         }
     });
-    np_api.patch(&name, &ssapply, &Patch::Apply(np_patch)).await.map_err(Error::KubeError)?;
+    np_api
+        .patch(&name, &ssapply, &Patch::Apply(np_patch))
+        .await
+        .map_err(Error::KubeError)?;
     info!("Ensured NetworkPolicy {name} in {tenant_ns}");
 
     // 8. ResourceQuota — cap CPU/memory/pods per tenant namespace
@@ -689,7 +714,10 @@ process.stdout.write(JSON.stringify(result));
             }
         }
     });
-    rq_api.patch(&name, &ssapply, &Patch::Apply(rq_patch)).await.map_err(Error::KubeError)?;
+    rq_api
+        .patch(&name, &ssapply, &Patch::Apply(rq_patch))
+        .await
+        .map_err(Error::KubeError)?;
     info!("Ensured ResourceQuota {name} in {tenant_ns}");
 
     // 9. PDB — ensure minAvailable=1 during voluntary disruptions
@@ -715,7 +743,10 @@ process.stdout.write(JSON.stringify(result));
             }
         }
     });
-    pdb_api.patch(&name, &ssapply, &Patch::Apply(pdb_patch)).await.map_err(Error::KubeError)?;
+    pdb_api
+        .patch(&name, &ssapply, &Patch::Apply(pdb_patch))
+        .await
+        .map_err(Error::KubeError)?;
     info!("Ensured PDB {name} in {tenant_ns}");
 
     // 10. ArgoCD Application — delegates Helm chart deployment to ArgoCD
@@ -786,11 +817,14 @@ process.stdout.write(JSON.stringify(result));
 
     // 12. ListenerRuleConfiguration — Cognito auth (conditional)
     let lrc_ar = ApiResource::from_gvk_with_plural(
-        &kube::api::GroupVersionKind::gvk("gateway.k8s.aws", "v1beta1", "ListenerRuleConfiguration"),
+        &kube::api::GroupVersionKind::gvk(
+            "gateway.k8s.aws",
+            "v1beta1",
+            "ListenerRuleConfiguration",
+        ),
         "listenerruleconfigurations",
     );
-    let lrc_api: Api<DynamicObject> =
-        Api::namespaced_with(client.clone(), tenant_ns, &lrc_ar);
+    let lrc_api: Api<DynamicObject> = Api::namespaced_with(client.clone(), tenant_ns, &lrc_ar);
     let lrc_name = format!("{name}-cognito");
 
     let lrc_condition = if !cognito_pool_arn.is_empty() {
@@ -819,7 +853,10 @@ process.stdout.write(JSON.stringify(result));
                 }]
             }
         });
-        match lrc_api.patch(&lrc_name, &ssapply, &Patch::Apply(lrc_patch)).await {
+        match lrc_api
+            .patch(&lrc_name, &ssapply, &Patch::Apply(lrc_patch))
+            .await
+        {
             Ok(_) => {
                 info!("Ensured ListenerRuleConfiguration {lrc_name} in {tenant_ns}");
                 json!({ "type": "CognitoAuthReady", "status": "True" })
@@ -838,8 +875,7 @@ process.stdout.write(JSON.stringify(result));
         &kube::api::GroupVersionKind::gvk("gateway.k8s.aws", "v1beta1", "TargetGroupConfiguration"),
         "targetgroupconfigurations",
     );
-    let tgc_api: Api<DynamicObject> =
-        Api::namespaced_with(client.clone(), tenant_ns, &tgc_ar);
+    let tgc_api: Api<DynamicObject> = Api::namespaced_with(client.clone(), tenant_ns, &tgc_ar);
     let tgc_name = format!("{name}-tg");
 
     let tgc_patch: serde_json::Value = json!({
