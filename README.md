@@ -104,13 +104,9 @@ cp cdk/cdk.json.example cdk/cdk.json
 | `githubOwner` | GitHub org/user for ArgoCD source |
 | `githubRepo` | Repository name (default: `openclaw-platform`) |
 | `ssoRoleArn` | IAM SSO role ARN for kubectl access |
-| `selfSignupEnabled` | Allow users to self-register (default: `true`) |
-| `defaultTenantBudgetUsd` | Monthly Bedrock budget per tenant in USD (default: `100`) |
-| `defaultTenantSkills` | Default skills for new tenants (default: `weather,gog`) |
 | `sesFromEmail` | SES sender email for welcome emails (default: `noreply@<domain>`) |
 | `albClientId` | Cognito App Client ID for ALB auth |
 | `openclawImage` | Container image (e.g., `ghcr.io/openclaw/openclaw:latest`) |
-| `allowedPublicCidrs` | CIDR ranges for EKS API endpoint access (placeholder) |
 
 </details>
 
