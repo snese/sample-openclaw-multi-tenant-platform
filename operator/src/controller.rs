@@ -737,7 +737,7 @@ process.stdout.write(JSON.stringify(result));
             "minAvailable": 1,
             "selector": {
                 "matchLabels": {
-                    "app.kubernetes.io/name": "openclaw-platform",
+                    "app.kubernetes.io/name": &name,
                     "app.kubernetes.io/instance": &name
                 }
             }
