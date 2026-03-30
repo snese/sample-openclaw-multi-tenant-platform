@@ -14,7 +14,16 @@ cognito_client = boto3.client('cognito-idp') if USER_POOL_ID else None
 
 
 def _count_recent_signups(domain):
-    """Count users with the same email domain created in the last hour."""
+    """Count users with the same email domain created in the last hour.
+
+    Performance note: Cognito ListUsers does not support domain-based filtering
+    (only username, email, phone_number, name prefix). This scans all users and
+    filters client-side, which is acceptable for small user pools typical of
+    company-internal deployments behind an email domain allowlist.
+
+    For production deployments with 1000+ users, consider replacing this with a
+    DynamoDB atomic counter keyed on (domain, hour) to avoid O(n) scans.
+    """
     if not cognito_client or not USER_POOL_ID:
         return 0
     cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
