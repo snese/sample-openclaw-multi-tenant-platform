@@ -471,10 +471,7 @@ export class EksClusterStack extends cdk.Stack {
       `/aws/containerinsights/${cluster.clusterName}/application`);
     const bedrockLatencyFilter = new logs.MetricFilter(this, 'BedrockLatencyFilter', {
       logGroup: appLogGroup,
-      filterPattern: logs.FilterPattern.all(
-        logs.FilterPattern.stringValue('$.message', '=', '*bedrock*response*'),
-        logs.FilterPattern.exists('$.duration'),
-      ),
+      filterPattern: logs.FilterPattern.literal('{ $.message = "*bedrock*response*" && $.duration = * }'),
       metricNamespace: 'OpenClaw/Bedrock',
       metricName: 'BedrockResponseTimeMs',
       metricValue: '$.duration',
