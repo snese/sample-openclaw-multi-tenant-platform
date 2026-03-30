@@ -75,23 +75,35 @@ generate_config() {
   read -rp "  OpenClaw image [ghcr.io/openclaw/openclaw:latest]: " openclaw_image
   openclaw_image="${openclaw_image:-ghcr.io/openclaw/openclaw:latest}"
 
-  # Write values using node (handles JSON safely)
+  # Write values using node via env vars (avoids shell injection)
+  DOMAIN="$domain" \
+  HOSTED_ZONE="$hosted_zone" \
+  CERT_ARN="$cert_arn" \
+  CF_CERT_ARN="$cf_cert_arn" \
+  COGNITO_POOL="$cognito_pool" \
+  COGNITO_CLIENT="$cognito_client" \
+  COGNITO_DOMAIN="$cognito_domain" \
+  ALLOWED_DOMAINS="$allowed_domains" \
+  SSO_ROLE="$sso_role" \
+  GITHUB_OWNER="$github_owner" \
+  GITHUB_REPO="$github_repo" \
+  OPENCLAW_IMAGE="$openclaw_image" \
   node -e "
     const fs = require('fs');
     const cfg = JSON.parse(fs.readFileSync('$TARGET', 'utf8'));
     const c = cfg.context;
-    c.zoneName = '$domain';
-    c.hostedZoneId = '$hosted_zone';
-    c.certificateArn = '$cert_arn';
-    c.cloudfrontCertificateArn = '$cf_cert_arn';
-    c.cognitoPoolId = '$cognito_pool';
-    c.cognitoClientId = '$cognito_client';
-    c.cognitoDomain = '$cognito_domain';
-    c.allowedEmailDomains = '$allowed_domains';
-    c.ssoRoleArn = '$sso_role';
-    c.githubOwner = '$github_owner';
-    c.githubRepo = '$github_repo';
-    c.openclawImage = '$openclaw_image';
+    c.zoneName = process.env.DOMAIN;
+    c.hostedZoneId = process.env.HOSTED_ZONE;
+    c.certificateArn = process.env.CERT_ARN;
+    c.cloudfrontCertificateArn = process.env.CF_CERT_ARN;
+    c.cognitoPoolId = process.env.COGNITO_POOL;
+    c.cognitoClientId = process.env.COGNITO_CLIENT;
+    c.cognitoDomain = process.env.COGNITO_DOMAIN;
+    c.allowedEmailDomains = process.env.ALLOWED_DOMAINS;
+    c.ssoRoleArn = process.env.SSO_ROLE;
+    c.githubOwner = process.env.GITHUB_OWNER;
+    c.githubRepo = process.env.GITHUB_REPO;
+    c.openclawImage = process.env.OPENCLAW_IMAGE;
     fs.writeFileSync('$TARGET', JSON.stringify(cfg, null, 2) + '\n');
   "
 

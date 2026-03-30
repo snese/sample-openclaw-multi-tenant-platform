@@ -24,7 +24,12 @@ usage() {
 CHECK_ONLY=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --phase) START_PHASE="$2"; shift 2 ;;
+    --phase)
+      if ! [[ "$2" =~ ^[1-4]$ ]]; then
+        echo "Error: --phase must be 1-4"
+        exit 1
+      fi
+      START_PHASE="$2"; shift 2 ;;
     --check) CHECK_ONLY=true; shift ;;
     --help)  usage ;;
     *)       echo "Unknown option: $1"; usage ;;
@@ -62,7 +67,7 @@ run_phase() {
 
 # ── Phase functions ─────────────────────────────────────────────────────────
 phase1_run() {
-  cd cdk && npm ci && npx cdk deploy OpenClawEksStack --require-approval broadening && cd ..
+  (cd cdk && npm ci && npx cdk deploy OpenClawEksStack --require-approval broadening)
 }
 phase1_verify() {
   aws cloudformation describe-stacks --stack-name OpenClawEksStack --query 'Stacks[0].StackStatus' --output text 2>/dev/null | grep -qE 'CREATE_COMPLETE|UPDATE_COMPLETE'
@@ -73,7 +78,7 @@ phase2_run() {
     bash scripts/build-operator.sh
   else
     echo "  Building operator..."
-    cd operator && cargo build --release && cd ..
+    (cd operator && cargo build --release)
     echo "  Applying CRD + deployment..."
     kubectl apply -f operator/yaml/crd.yaml
     kubectl apply -f operator/yaml/deployment.yaml
