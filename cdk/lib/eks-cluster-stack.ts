@@ -508,6 +508,16 @@ export class EksClusterStack extends cdk.Stack {
     // ensures triggers are always re-attached after every deployment.
     const selfSignupEnabled = this.node.tryGetContext('selfSignupEnabled') !== false;
 
+    // Lambda invoke permissions for Cognito (must exist before Custom Resource)
+    preSignupFn.addPermission('CognitoInvoke', {
+      principal: new iam.ServicePrincipal('cognito-idp.amazonaws.com'),
+      sourceArn: `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${cognitoPoolId}`,
+    });
+    postConfirmFn.addPermission('CognitoInvoke', {
+      principal: new iam.ServicePrincipal('cognito-idp.amazonaws.com'),
+      sourceArn: `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${cognitoPoolId}`,
+    });
+
     new cr.AwsCustomResource(this, 'CognitoTriggers', {
       onCreate: {
         service: 'CognitoIdentityServiceProvider',
@@ -537,22 +547,21 @@ export class EksClusterStack extends cdk.Stack {
         },
         physicalResourceId: cr.PhysicalResourceId.of('cognito-triggers'),
       },
+      onDelete: {
+        service: 'CognitoIdentityServiceProvider',
+        action: 'updateUserPool',
+        parameters: {
+          UserPoolId: cognitoPoolId,
+          LambdaConfig: {},
+        },
+        physicalResourceId: cr.PhysicalResourceId.of('cognito-triggers'),
+      },
       policy: cr.AwsCustomResourcePolicy.fromStatements([
         new iam.PolicyStatement({
           actions: ['cognito-idp:UpdateUserPool'],
           resources: [`arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${cognitoPoolId}`],
         }),
       ]),
-    });
-
-    // Lambda invoke permissions for Cognito
-    preSignupFn.addPermission('CognitoInvoke', {
-      principal: new iam.ServicePrincipal('cognito-idp.amazonaws.com'),
-      sourceArn: `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${cognitoPoolId}`,
-    });
-    postConfirmFn.addPermission('CognitoInvoke', {
-      principal: new iam.ServicePrincipal('cognito-idp.amazonaws.com'),
-      sourceArn: `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${cognitoPoolId}`,
     });
 
     // ── CodeBuild: Tenant Builder ────────────────────────────────────────────
