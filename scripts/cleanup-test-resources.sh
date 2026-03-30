@@ -16,22 +16,29 @@ echo ""
 
 # 1. Identify active ErrorPages bucket from CloudFormation
 ACTIVE_BUCKET=$(get_output ErrorPagesBucketName)
-echo "==> Active ErrorPages bucket: ${ACTIVE_BUCKET:-unknown}"
+if [ -z "$ACTIVE_BUCKET" ]; then
+  echo "ERROR: Could not identify active ErrorPages bucket from CloudFormation stack '$STACK'"
+  echo "ERROR: Cannot proceed with S3 cleanup - risk of deleting active resources"
+  echo "  Skipping S3 cleanup, continuing with secrets cleanup..."
+  echo ""
+else
+  echo "==> Active ErrorPages bucket: ${ACTIVE_BUCKET}"
 
-# 2. List orphan ErrorPages buckets
-echo ""
-echo "==> Checking for orphan S3 ErrorPages buckets..."
-aws s3api list-buckets --query 'Buckets[?contains(Name,`errorpages`) || contains(Name,`ErrorPages`)].Name' --output text | tr '\t' '\n' | while read -r bucket; do
-  [ -z "$bucket" ] && continue
-  if [ "$bucket" != "$ACTIVE_BUCKET" ]; then
-    echo "  ORPHAN: $bucket"
-    if [ "$DRY_RUN" = "false" ]; then
-      aws s3 rb "s3://${bucket}" --force --region "$REGION" && echo "    Deleted" || echo "    Failed (may need manual cleanup)"
+  # 2. List orphan ErrorPages buckets
+  echo ""
+  echo "==> Checking for orphan S3 ErrorPages buckets..."
+  aws s3api list-buckets --query 'Buckets[?contains(Name,`errorpages`) || contains(Name,`ErrorPages`)].Name' --output text | tr '\t' '\n' | while read -r bucket; do
+    [ -z "$bucket" ] && continue
+    if [ "$bucket" != "$ACTIVE_BUCKET" ]; then
+      echo "  ORPHAN: $bucket"
+      if [ "$DRY_RUN" = "false" ]; then
+        aws s3 rb "s3://${bucket}" --force --region "$REGION" && echo "    Deleted" || echo "    Failed (may need manual cleanup)"
+      fi
+    else
+      echo "  ACTIVE: $bucket (skip)"
     fi
-  else
-    echo "  ACTIVE: $bucket (skip)"
-  fi
-done
+  done
+fi
 
 # 3. Clean up test tenant secrets
 echo ""
