@@ -82,7 +82,8 @@ grep -rn 'AKIA\|amazonaws\.com\|[0-9]\{12\}' \
 ### 3. Deploy to your environment
 
 ```bash
-bash scripts/deploy.sh
+./setup.sh
+# Or step-by-step: see README.md Getting Started
 ```
 
 ### 4. Test
