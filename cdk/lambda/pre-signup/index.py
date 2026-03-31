@@ -10,7 +10,6 @@ ALLOWED_DOMAINS = [d.strip() for d in os.environ.get('ALLOWED_DOMAINS', 'example
 TURNSTILE_SECRET = os.environ.get('TURNSTILE_SECRET', '')
 USER_POOL_ID = os.environ.get('USER_POOL_ID', '')
 RATE_LIMIT = int(os.environ.get('SIGNUP_RATE_LIMIT', '5'))
-AUTO_CONFIRM = os.environ.get('AUTO_CONFIRM', 'true').lower() == 'true'
 
 ALLOWED_URL_SCHEMES = {'https'}
 TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
@@ -82,10 +81,5 @@ def handler(event, context):
         resp = json.loads(urllib.request.urlopen(req).read())
         if not resp.get('success'):
             raise Exception('CAPTCHA verification failed.')
-
-    # Auto-confirm user and verify email (skips verification code step)
-    if AUTO_CONFIRM:
-        event['response']['autoConfirmUser'] = True
-        event['response']['autoVerifyEmail'] = True
 
     return event
