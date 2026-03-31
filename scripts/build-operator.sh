@@ -27,7 +27,7 @@ if [[ -f "$CDK_JSON" ]]; then
   DOMAIN=$(node -e "console.log(require('./$CDK_JSON').context.zoneName || '')")
   GITHUB_OWNER=$(node -e "console.log(require('./$CDK_JSON').context.githubOwner || '')")
   GITHUB_REPO=$(node -e "console.log(require('./$CDK_JSON').context.githubRepo || '')")
-  COGNITO_POOL_ARN=$(node -e "const c=require('./$CDK_JSON').context; const id=c.cognitoPoolId||''; const r='${REGION}'; const a=c.accountId||''; console.log(id ? 'arn:aws:cognito-idp:'+r+':'+a+':userpool/'+id : '')")
+  COGNITO_POOL_ARN=$(node -e "const c=require('./$CDK_JSON').context; const id=c.cognitoPoolId||''; const r='${REGION}'; const a=c.accountId||'${ACCOUNT}'; console.log(id ? 'arn:aws:cognito-idp:'+r+':'+a+':userpool/'+id : '')")
   COGNITO_CLIENT_ID=$(node -e "console.log(require('./$CDK_JSON').context.cognitoClientId || '')")
   COGNITO_DOMAIN=$(node -e "console.log(require('./$CDK_JSON').context.cognitoDomain || '')")
 else
