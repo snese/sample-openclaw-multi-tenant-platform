@@ -161,10 +161,7 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
 
 /// Check ArgoCD Application sync and health status.
 /// Reads ARGOCD_NAMESPACE env var (default: "argocd") for portability.
-async fn check_argocd_sync(
-    client: &Client,
-    name: &str,
-) -> serde_json::Value {
+async fn check_argocd_sync(client: &Client, name: &str) -> serde_json::Value {
     use kube::api::{ApiResource, DynamicObject};
 
     let argocd_ns = std::env::var("ARGOCD_NAMESPACE").unwrap_or_else(|_| "argocd".into());
@@ -211,11 +208,7 @@ async fn check_argocd_sync(
 }
 
 /// Check if the tenant Deployment has available replicas
-async fn check_deployment(
-    client: &Client,
-    name: &str,
-    tenant_ns: &str,
-) -> serde_json::Value {
+async fn check_deployment(client: &Client, name: &str, tenant_ns: &str) -> serde_json::Value {
     use k8s_openapi::api::apps::v1::Deployment;
 
     let deploy_api: Api<Deployment> = Api::namespaced(client.clone(), tenant_ns);
@@ -229,7 +222,10 @@ async fn check_deployment(
             let (status, message) = if available >= 1 {
                 ("True", "Deployment has available replicas".to_string())
             } else {
-                ("False", "Deployment has no available replicas yet".to_string())
+                (
+                    "False",
+                    "Deployment has no available replicas yet".to_string(),
+                )
             };
             json!({ "type": "DeploymentAvailable", "status": status, "message": message })
         }
