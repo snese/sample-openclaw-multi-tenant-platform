@@ -68,16 +68,20 @@ pub async fn ensure_namespace(
     Ok(())
 }
 
-/// Read env var, treating CDK placeholder values (all-caps, no dots/dashes) as unset.
-fn env_or_default(key: &str, default: &str) -> String {
+/// Read env var, treating CDK placeholder values as unset.
+pub fn env_or_default(key: &str, default: &str) -> String {
+    const KNOWN_PLACEHOLDERS: &[&str] = &[
+        "REGION",
+        "DOMAIN",
+        "COGNITO_POOL_ARN",
+        "COGNITO_CLIENT_ID",
+        "COGNITO_DOMAIN",
+        "GATEWAY_DOMAIN",
+    ];
     std::env::var(key)
         .ok()
         .filter(|v| !v.is_empty())
-        .filter(|v| {
-            // Reject CDK placeholders like "REGION", "DOMAIN", "COGNITO_POOL_ARN"
-            // Real values contain lowercase, dots, dashes, or slashes
-            !v.chars().all(|c| c.is_ascii_uppercase() || c == '_')
-        })
+        .filter(|v| !KNOWN_PLACEHOLDERS.contains(&v.as_str()))
         .unwrap_or_else(|| default.into())
 }
 
