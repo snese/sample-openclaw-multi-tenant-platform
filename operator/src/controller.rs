@@ -82,6 +82,15 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
             .await?;
     conditions.push(argocd_condition);
 
+    // ReferenceGrant in keda namespace for KEDA interceptor cross-namespace routing
+    // Only needed when scale-to-zero is enabled (HTTPRoute routes through interceptor)
+    let gateway_domain = std::env::var("GATEWAY_DOMAIN").unwrap_or_default();
+    let scale_to_zero = !tenant.spec.always_on && !gateway_domain.is_empty();
+    if scale_to_zero {
+        resources::ensure_reference_grant(client.clone(), &name, tenant_ns, &ssapply).await?;
+        conditions.push(json!({ "type": "ReferenceGrantReady", "status": "True" }));
+    }
+
     // Check ArgoCD Application sync + health status
     let argocd_ready = check_argocd_sync(&client, &name).await;
     conditions.push(argocd_ready.clone());
@@ -247,6 +256,30 @@ async fn cleanup(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Res
             .await
             .map_err(Error::KubeError)?;
         info!("Deleted ArgoCD Application {app_name}");
+    }
+
+    // Delete ReferenceGrant in keda namespace
+    let rg_ar = kube::api::ApiResource {
+        group: "gateway.networking.k8s.io".into(),
+        version: "v1beta1".into(),
+        kind: "ReferenceGrant".into(),
+        api_version: "gateway.networking.k8s.io/v1beta1".into(),
+        plural: "referencegrants".into(),
+    };
+    let rg_api: Api<kube::api::DynamicObject> =
+        Api::namespaced_with(client.clone(), "keda", &rg_ar);
+    let rg_name = format!("allow-{name}");
+    if rg_api
+        .get_opt(&rg_name)
+        .await
+        .map_err(Error::KubeError)?
+        .is_some()
+    {
+        rg_api
+            .delete(&rg_name, &Default::default())
+            .await
+            .map_err(Error::KubeError)?;
+        info!("Deleted ReferenceGrant {rg_name}");
     }
 
     // Delete namespace (cascades all resources inside)
