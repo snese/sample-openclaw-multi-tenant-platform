@@ -24,6 +24,8 @@ spec:
         fsGroup: 1000
         runAsUser: 1000
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: init-config
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
