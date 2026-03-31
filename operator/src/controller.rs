@@ -80,9 +80,10 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
             "conditions": []
         }
     });
-    let _ = tenants
+    tenants
         .patch_status(&name, &ssapply, &Patch::Apply(provisioning_status))
-        .await;
+        .await
+        .map_err(Error::KubeError)?;
 
     // Ensure resources — collect conditions as we go
     let mut conditions = Vec::new();
@@ -158,12 +159,15 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
     Ok(Action::requeue(Duration::from_secs(requeue_secs)))
 }
 
-/// Check ArgoCD Application sync and health status
+/// Check ArgoCD Application sync and health status.
+/// Reads ARGOCD_NAMESPACE env var (default: "argocd") for portability.
 async fn check_argocd_sync(
     client: &Client,
     name: &str,
 ) -> serde_json::Value {
     use kube::api::{ApiResource, DynamicObject};
+
+    let argocd_ns = std::env::var("ARGOCD_NAMESPACE").unwrap_or_else(|_| "argocd".into());
 
     let ar = ApiResource {
         group: "argoproj.io".into(),
@@ -172,7 +176,7 @@ async fn check_argocd_sync(
         api_version: "argoproj.io/v1alpha1".into(),
         plural: "applications".into(),
     };
-    let app_api: Api<DynamicObject> = Api::namespaced_with(client.clone(), "argocd", &ar);
+    let app_api: Api<DynamicObject> = Api::namespaced_with(client.clone(), &argocd_ns, &ar);
     let app_name = format!("tenant-{name}");
 
     match app_api.get(&app_name).await {
@@ -239,6 +243,32 @@ async fn check_deployment(
     }
 }
 
+/// Best-effort: update Tenant CR status to Error phase.
+/// Called synchronously from error_policy context to avoid race conditions
+/// with subsequent reconciliations.
+async fn set_error_status(client: Client, name: &str, error_msg: &str) {
+    let tenants: Api<Tenant> = Api::default_namespaced(client);
+    let ssapply = PatchParams::apply("tenant-operator").force();
+    let status = json!({
+        "apiVersion": "openclaw.io/v1alpha1",
+        "kind": "Tenant",
+        "status": {
+            "phase": "Error",
+            "conditions": [{
+                "type": "ReconcileError",
+                "status": "True",
+                "message": error_msg
+            }]
+        }
+    });
+    if let Err(e) = tenants
+        .patch_status(name, &ssapply, &Patch::Apply(status))
+        .await
+    {
+        warn!("Failed to set Error phase for {name}: {e}");
+    }
+}
+
 /// Cleanup on tenant deletion
 async fn cleanup(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Result<Action> {
     let client = ctx.client.clone();
@@ -284,32 +314,12 @@ fn error_policy(tenant: Arc<Tenant>, error: &Error, ctx: Arc<Context>) -> Action
     let name = tenant.name_any();
     warn!("Reconcile failed for {}: {:?}", name, error);
 
-    // Best-effort: set phase to Error so frontend/admin can see the failure
+    // Set Error phase synchronously via block_on to avoid race conditions
+    // with subsequent reconciliations that might succeed and set Ready.
     let client = ctx.client.clone();
     let error_msg = format!("{error}");
-    let name_owned = name.clone();
-    tokio::spawn(async move {
-        let tenants: Api<Tenant> = Api::default_namespaced(client);
-        let ssapply = PatchParams::apply("tenant-operator").force();
-        let status = json!({
-            "apiVersion": "openclaw.io/v1alpha1",
-            "kind": "Tenant",
-            "status": {
-                "phase": "Error",
-                "conditions": [{
-                    "type": "ReconcileError",
-                    "status": "True",
-                    "message": error_msg
-                }]
-            }
-        });
-        if let Err(e) = tenants
-            .patch_status(&name_owned, &ssapply, &Patch::Apply(status))
-            .await
-        {
-            warn!("Failed to set Error phase for {name_owned}: {e}");
-        }
-    });
+    let rt = tokio::runtime::Handle::current();
+    let _ = rt.block_on(set_error_status(client, &name, &error_msg));
 
     Action::requeue(Duration::from_secs(60))
 }
