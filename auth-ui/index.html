@@ -169,7 +169,7 @@ function pollWorkspace(url,isNewSignup,gwToken){
   msg.textContent=isNewSignup?'This usually takes about 2 minutes.':'This may take up to 30 seconds if your workspace was idle.';
   progress.style.display=isNewSignup?'block':'none';
   fallback.style.display='none';
-  if(isNewSignup){bar.style.width='5%';ptext.textContent='Setting up...';}
+  if(isNewSignup){bar.style.width='5%';bar.style.background='var(--primary)';ptext.textContent='Setting up...';}
   const max=isNewSignup?60:20;
   let i=0;
   const poll=async()=>{
@@ -184,7 +184,7 @@ function pollWorkspace(url,isNewSignup,gwToken){
         ptext.textContent='Setup did not complete in time.';
       }
       title.textContent='Workspace unavailable';
-      msg.innerHTML='Setup is taking longer than expected.<br>Please try again in a few minutes, or contact your administrator.';
+      msg.textContent='Setup is taking longer than expected. Please try again in a few minutes, or contact your administrator.';
       fallback.style.display='block';
       return;
     }
