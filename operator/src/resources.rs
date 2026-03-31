@@ -68,6 +68,19 @@ pub async fn ensure_namespace(
     Ok(())
 }
 
+/// Read env var, treating CDK placeholder values (all-caps, no dots/dashes) as unset.
+fn env_or_default(key: &str, default: &str) -> String {
+    std::env::var(key)
+        .ok()
+        .filter(|v| !v.is_empty())
+        .filter(|v| {
+            // Reject CDK placeholders like "REGION", "DOMAIN", "COGNITO_POOL_ARN"
+            // Real values contain lowercase, dots, dashes, or slashes
+            !v.chars().all(|c| c.is_ascii_uppercase() || c == '_')
+        })
+        .unwrap_or_else(|| default.into())
+}
+
 pub async fn ensure_argocd_app(
     client: Client,
     name: &str,
@@ -82,10 +95,10 @@ pub async fn ensure_argocd_app(
             "https://github.com/snese/sample-openclaw-multi-tenant-platform.git".into()
         });
     let target_revision = std::env::var("HELM_TARGET_REVISION").unwrap_or_else(|_| "main".into());
-    let gateway_domain = std::env::var("GATEWAY_DOMAIN").unwrap_or_default();
-    let cognito_client_id = std::env::var("COGNITO_CLIENT_ID").unwrap_or_default();
-    let cognito_domain = std::env::var("COGNITO_DOMAIN").unwrap_or_default();
-    let cognito_pool_arn = std::env::var("COGNITO_POOL_ARN").unwrap_or_default();
+    let gateway_domain = env_or_default("GATEWAY_DOMAIN", "");
+    let cognito_client_id = env_or_default("COGNITO_CLIENT_ID", "");
+    let cognito_domain = env_or_default("COGNITO_DOMAIN", "");
+    let cognito_pool_arn = env_or_default("COGNITO_POOL_ARN", "");
 
     let budget = spec.budget.as_ref().map(|b| b.monthly_usd).unwrap_or(100);
 
