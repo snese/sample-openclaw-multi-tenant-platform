@@ -319,7 +319,7 @@ fn error_policy(tenant: Arc<Tenant>, error: &Error, ctx: Arc<Context>) -> Action
     let client = ctx.client.clone();
     let error_msg = format!("{error}");
     let rt = tokio::runtime::Handle::current();
-    let _ = rt.block_on(set_error_status(client, &name, &error_msg));
+    rt.block_on(set_error_status(client, &name, &error_msg));
 
     Action::requeue(Duration::from_secs(60))
 }
