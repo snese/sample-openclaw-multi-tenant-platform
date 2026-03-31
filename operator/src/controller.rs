@@ -82,13 +82,8 @@ async fn apply(tenant: Arc<Tenant>, tenant_ns: &str, ctx: Arc<Context>) -> Resul
     resources::ensure_resource_quota(client.clone(), &name, tenant_ns, &ssapply).await?;
     resources::ensure_pdb(client.clone(), &name, tenant_ns, &ssapply).await?;
 
-    let httproute_condition = resources::ensure_httproute(
-        client.clone(),
-        &name,
-        tenant_ns,
-        &ssapply,
-    )
-    .await?;
+    let httproute_condition =
+        resources::ensure_httproute(client.clone(), &name, tenant_ns, &ssapply).await?;
     let tgc_condition = resources::ensure_tgc(client.clone(), &name, tenant_ns, &ssapply).await?;
     let keda_condition =
         resources::ensure_keda_hso(client.clone(), &name, tenant_ns, &ssapply).await?;
