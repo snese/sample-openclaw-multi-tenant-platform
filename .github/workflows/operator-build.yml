@@ -27,11 +27,16 @@ jobs:
       - id: check
         run: |
           # Check via GitHub API if self-hosted runners are online
-          RUNNERS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "${{ github.api_url }}/repos/${{ github.repository }}/actions/runners" \
-            | jq '[.runners[] | select(.status=="online")] | length')
+          RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "${{ github.api_url }}/repos/${{ github.repository }}/actions/runners")
+          if ! echo "$RESPONSE" | jq -e '.runners' >/dev/null 2>&1; then
+            echo "Failed to query runners API or invalid response"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          RUNNERS=$(echo "$RESPONSE" | jq '[.runners[] | select(.status=="online")] | length')
           echo "Online runners: $RUNNERS"
-          echo "available=$( [ "$RUNNERS" -ge 2 ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+          echo "available=$( [ "${RUNNERS:-0}" -ge 2 ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
 
   # === Fast path: native build on self-hosted runners ===
   build-arm64-native:
