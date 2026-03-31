@@ -37,7 +37,7 @@ Deploy in 20 minutes. Scale to 500 users. Pay only for what you use.
 - **3-layer origin protection** — internet-facing ALB with CF-only SG + WAF + HTTPS
 - **Custom auth UI** — branded login/signup on your domain (no Cognito Hosted UI)
 - **Self-service signup** — Cognito + Lambda auto-provisions tenants on auto-provisioning
-- **Operator-managed** — Tenant Operator creates all K8s resources directly (no GitOps layer)
+- **Operator-managed** — Tenant Operator (Rust/kube-rs) creates all K8s resources via SSA ([details](docs/architecture.md#tenant-operator--how-it-works))
 - **Cost control** — per-tenant monthly budget with per-model pricing alerts
 - **Graviton ARM64** — 20% cheaper compute with t4g instances
 - **Security deep-dive** — 10 layers, threat model, compliance considerations
@@ -170,6 +170,26 @@ export OPENCLAW_TENANT_ROLE_ARN=$(aws cloudformation describe-stacks \
 ./scripts/create-tenant.sh alice --display-name "Alice" --emoji "🤖"
 ```
 
+<details>
+<summary>All create-tenant options (maps to Tenant CRD spec)</summary>
+
+| Flag | CRD Field | Description |
+|------|-----------|-------------|
+| `--display-name` | `spec.displayName` | Human-readable name |
+| `--emoji` | `spec.emoji` | Emoji for dashboards and logs |
+| `--skills` | `spec.skills` | Comma-separated skill names |
+| `--budget` | `spec.budget.monthlyUSD` | Monthly spend cap in USD (default: 100) |
+| `--image` | `spec.image.repository` | Container image override |
+| `--image-tag` | `spec.image.tag` | Image tag override |
+| `--cpu-request` | `spec.resources.requests.cpu` | CPU request |
+| `--memory-request` | `spec.resources.requests.memory` | Memory request |
+| `--cpu-limit` | `spec.resources.limits.cpu` | CPU limit |
+| `--memory-limit` | `spec.resources.limits.memory` | Memory limit |
+| `--env` | `spec.env` | Extra env vars (KEY=VALUE, repeatable) |
+| `--disabled` | `spec.enabled=false` | Create in suspended state |
+
+</details>
+
 ### 6. Finalize
 
 ```bash
@@ -180,7 +200,7 @@ export OPENCLAW_TENANT_ROLE_ARN=$(aws cloudformation describe-stacks \
 ### 7. Access
 
 | URL | Purpose |
-|-----|---------|
+|-----|--------|
 | `https://your-domain.com` | Landing page (custom auth UI) |
 | `https://claw.your-domain.com/t/alice/` | Tenant AI assistant (path-based routing) |
 | `https://your-domain.com/admin.html` | Admin dashboard |
@@ -204,7 +224,7 @@ export OPENCLAW_TENANT_ROLE_ARN=$(aws cloudformation describe-stacks \
 ## Tenant Management
 
 ```bash
-./scripts/create-tenant.sh <name> [options]    # Create (--display-name --emoji --skills --budget)
+./scripts/create-tenant.sh <name> [options]    # Create (see options above)
 ./scripts/delete-tenant.sh <name>              # Delete (with confirmation)
 ./scripts/verify-tenant.sh <name>              # Health check
 ./scripts/check-all-tenants.sh                 # Check all tenants
@@ -216,7 +236,7 @@ export OPENCLAW_TENANT_ROLE_ARN=$(aws cloudformation describe-stacks \
 ## Operations
 
 | Script | Purpose |
-|--------|---------|
+|--------|--------|
 | `post-deploy.sh` | CloudFront #2 + Route53 + WAF |
 | `build-operator.sh` | Build, push, deploy Tenant Operator |
 | `deploy-auth-ui.sh` | Upload auth UI to S3 + invalidate cache |
@@ -230,7 +250,7 @@ export OPENCLAW_TENANT_ROLE_ARN=$(aws cloudformation describe-stacks \
 ## Security
 
 | Layer | Control |
-|-------|---------|
+|-------|--------|
 | Edge | CloudFront + WAF (AWS Common Rules + rate limit) |
 | Signup | Cloudflare Turnstile CAPTCHA + email domain restriction |
 | Network | Internet-facing ALB with CF-only SG + WAF + HTTPS |
@@ -261,7 +281,7 @@ export OPENCLAW_TENANT_ROLE_ARN=$(aws cloudformation describe-stacks \
 ### Architecture
 
 Path-based routing via Gateway API: `claw.example.com/t/<tenant>/` — one domain, one ALB, no wildcard DNS needed.
-- [System Architecture](docs/architecture.md)
+- [System Architecture](docs/architecture.md) — includes Operator SSA flow diagram
 - [Security Deep Dive](docs/security.md)
 
 ### Components
@@ -276,6 +296,7 @@ Learn how each component works:
 | [Observability](docs/components/observability.md) | CloudWatch, alarms, cost tracking |
 | [CI/CD](docs/components/cicd.md) | GitHub Actions, Tenant Operator, image updates |
 | [Storage](docs/components/storage.md) | PVC, EBS snapshots, backup/restore |
+| [GitOps](docs/components/gitops.md) | ArgoCD (EKS Capability) — platform components only |
 
 ### Operations
 | Guide | Description |
@@ -295,14 +316,19 @@ Learn how each component works:
 │   ├── lib/eks-cluster-stack.ts
 │   ├── lambda/                 # Pre-signup, Post-confirmation, Cost-enforcer
 │   └── cdk.json.example        # Config template
-├── helm/                       # Helm chart templates (reference only, not used by operator)
-│   ├── charts/openclaw-platform/
-│   └── tenants/values-template.yaml
-├── docs/                       # Architecture, security, components, operations, design
-│   ├── architecture.md
+├── helm/                       # Reference Helm templates (NOT used by Operator at runtime)
+│   ├── charts/openclaw-platform/  # Templates for docs and manual debugging
+│   ├── gateway.yaml            # Gateway API resource
+│   └── tenants/values-template.yaml  # Example values for reference
+├── operator/                   # Tenant Operator (Rust/kube-rs) — creates all K8s resources via SSA
+│   ├── src/                    # controller.rs, resources.rs, types.rs (CRD)
+│   ├── yaml/                   # CRD manifest, operator deployment
+│   └── Dockerfile
+├── docs/                       # Architecture, security, components, operations
+│   ├── architecture.md         # Includes Operator SSA flow diagram
 │   ├── security.md
 │   ├── components/             # Per-component deep dives
-│   ├── operations/             # Admin, user, migration, webhook guides
+│   └── operations/             # Admin, user, webhook guides
 ├── scripts/                    # 20+ operations scripts
 ├── .github/workflows/ci.yml   # CI pipeline
 └── LICENSE                     # MIT
