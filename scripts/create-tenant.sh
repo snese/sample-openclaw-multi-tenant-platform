@@ -86,7 +86,15 @@ aws eks create-pod-identity-association \
   --role-arn "${ROLE_ARN}" \
   --output text --query 'association.associationId'
 
-# 4. Helm install
+# 4. Create K8s Secret with gateway token
+echo "  → Creating K8s Secret: ${TENANT}-gateway-token"
+kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic "${TENANT}-gateway-token" \
+  --namespace "${NAMESPACE}" \
+  --from-literal="OPENCLAW_GATEWAY_TOKEN=${TOKEN}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# 5. Helm install
 echo "  → Helm installing ${RELEASE}"
 helm install "${RELEASE}" "${CHART_DIR}" \
   --namespace "${NAMESPACE}" \
@@ -94,7 +102,7 @@ helm install "${RELEASE}" "${CHART_DIR}" \
   -f "${VALUES_FILE}" \
   --wait --timeout 120s
 
-# 5. Wait for pod Ready
+# 6. Wait for pod Ready
 echo "  → Waiting for pod Ready"
 kubectl wait pod \
   -n "${NAMESPACE}" \
@@ -102,7 +110,7 @@ kubectl wait pod \
   --for=condition=Ready \
   --timeout=120s
 
-# 6. Summary
+# 7. Summary
 POD=$(kubectl get pod -n "${NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE}" -o jsonpath='{.items[0].metadata.name}')
 echo ""
 echo "=== Tenant Created ==="
