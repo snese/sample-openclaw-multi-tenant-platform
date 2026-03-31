@@ -18,7 +18,6 @@ All components (Operator, PostConfirmation Lambda, create-tenant.sh, Helm chart)
 | ResourceQuota | `{tenant}` | `alice` |
 | PDB | `{tenant}` | `alice` |
 | HTTPRoute | `{tenant}` | `alice` |
-| ListenerRuleConfiguration | `{tenant}-cognito` | `alice-cognito` |
 | TargetGroupConfiguration | `{tenant}` | `alice` |
 | KEDA HTTPScaledObject | `{tenant}` | `alice` |
 | SM Secret | `openclaw/{tenant}/gateway-token` | `openclaw/alice/gateway-token` |
@@ -38,7 +37,7 @@ All components (Operator, PostConfirmation Lambda, create-tenant.sh, Helm chart)
 | Component | Creates |
 |-----------|---------|
 | PostConfirmation Lambda | Pod Identity Association, SM Secret, Cognito attribute, Tenant CR, gateway-token K8s Secret |
-| Operator | Namespace, SA, Deployment, Service, ConfigMap, PVC, NetworkPolicy, ResourceQuota, PDB, HTTPRoute, LRC, TGC, KEDA HSO |
+| Operator | Namespace, SA, Deployment, Service, ConfigMap, PVC, NetworkPolicy, ResourceQuota, PDB, HTTPRoute, TGC, KEDA HSO |
 | create-tenant.sh (manual) | Same as Lambda (for manual provisioning without Cognito) |
 
 ## Validation
