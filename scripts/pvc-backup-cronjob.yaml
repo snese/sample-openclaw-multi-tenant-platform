@@ -53,7 +53,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: backup
-              image: amazon/aws-cli:2.27
+              image: amazon/aws-cli:2.27.0
               securityContext:
                 runAsNonRoot: true
                 readOnlyRootFilesystem: true
