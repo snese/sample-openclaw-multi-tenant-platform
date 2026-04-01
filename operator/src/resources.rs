@@ -195,6 +195,29 @@ pub async fn ensure_argocd_app(
         .await
         .map_err(Error::KubeError)?;
     info!("Ensured ArgoCD Application {app_name}");
+
+    // Trigger immediate ArgoCD refresh+sync by setting the refresh annotation.
+    // ArgoCD controller removes this annotation after processing.
+    // This avoids waiting for the default poll interval (3-6 min).
+    let refresh_patch: Value = json!({
+        "metadata": {
+            "annotations": {
+                "argocd.argoproj.io/refresh": "hard"
+            }
+        }
+    });
+    if let Err(e) = app_api
+        .patch(
+            &app_name,
+            &PatchParams::default(),
+            &Patch::Merge(refresh_patch),
+        )
+        .await
+    {
+        // Non-fatal: ArgoCD will still sync on its regular interval
+        warn!("Failed to trigger immediate ArgoCD refresh for {app_name}: {e}");
+    }
+
     Ok(
         json!({ "type": "ArgoAppReady", "status": "True", "message": format!("ArgoCD Application {app_name} synced") }),
     )
