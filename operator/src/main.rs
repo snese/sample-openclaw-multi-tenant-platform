@@ -27,8 +27,13 @@ async fn index(state: Data<State>) -> HttpResponse {
 /// Returns error instead of silently creating broken resources.
 fn validate_env() -> anyhow::Result<()> {
     const KNOWN_PLACEHOLDERS: &[&str] = &[
-        "REGION", "DOMAIN", "COGNITO_POOL_ARN", "COGNITO_CLIENT_ID",
-        "COGNITO_DOMAIN", "GATEWAY_DOMAIN", "https://github.com/ORG/REPO.git",
+        "REGION",
+        "DOMAIN",
+        "COGNITO_POOL_ARN",
+        "COGNITO_CLIENT_ID",
+        "COGNITO_DOMAIN",
+        "GATEWAY_DOMAIN",
+        "https://github.com/ORG/REPO.git",
     ];
     let required = [
         ("AWS_REGION", "AWS region (e.g. us-west-2)"),
@@ -38,7 +43,9 @@ fn validate_env() -> anyhow::Result<()> {
     for (key, desc) in &required {
         match std::env::var(key) {
             Ok(val) if KNOWN_PLACEHOLDERS.contains(&val.as_str()) => {
-                errors.push(format!("  {key}={val} (placeholder — run setup.sh or sed to inject real values)"));
+                errors.push(format!(
+                    "  {key}={val} (placeholder — run setup.sh or sed to inject real values)"
+                ));
             }
             Ok(val) if val.is_empty() => {
                 errors.push(format!("  {key} is empty — expected: {desc}"));
