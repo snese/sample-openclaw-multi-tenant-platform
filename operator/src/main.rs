@@ -24,8 +24,8 @@ async fn index(state: Data<State>) -> HttpResponse {
 }
 
 /// Validate that critical env vars are not CDK/sed placeholders.
-/// Panics early with a clear message instead of silently creating broken resources.
-fn validate_env() {
+/// Returns error instead of silently creating broken resources.
+fn validate_env() -> anyhow::Result<()> {
     const KNOWN_PLACEHOLDERS: &[&str] = &[
         "REGION", "DOMAIN", "COGNITO_POOL_ARN", "COGNITO_CLIENT_ID",
         "COGNITO_DOMAIN", "GATEWAY_DOMAIN", "https://github.com/ORG/REPO.git",
@@ -50,11 +50,17 @@ fn validate_env() {
         }
     }
     if !errors.is_empty() {
-        error!("Fatal: Operator env vars contain placeholders or are missing.\n\
-               This means setup.sh sed substitution did not run.\n\
-               Fix: re-run setup.sh or manually set env vars.\n\n{}", errors.join("\n"));
-        std::process::exit(1);
+        let msg = format!(
+            "Fatal: Operator env vars contain placeholders or are missing.\n\
+             This means setup.sh sed substitution did not run.\n\
+             Fix: re-run setup.sh or manually set env vars.\n\n{}",
+            errors.join("\n")
+        );
+        error!("{}", msg);
+        eprintln!("{}", msg);
+        anyhow::bail!("Environment validation failed");
     }
+    Ok(())
 }
 
 #[tokio::main]
@@ -68,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
     telemetry::init();
     info!("Starting tenant-operator v{}", env!("CARGO_PKG_VERSION"));
 
-    validate_env();
+    validate_env()?;
 
     let state = State::default();
     let controller = controller::run(state.clone());
