@@ -23,6 +23,40 @@ async fn index(state: Data<State>) -> HttpResponse {
     }))
 }
 
+/// Validate that critical env vars are not CDK/sed placeholders.
+/// Panics early with a clear message instead of silently creating broken resources.
+fn validate_env() {
+    const KNOWN_PLACEHOLDERS: &[&str] = &[
+        "REGION", "DOMAIN", "COGNITO_POOL_ARN", "COGNITO_CLIENT_ID",
+        "COGNITO_DOMAIN", "GATEWAY_DOMAIN", "https://github.com/ORG/REPO.git",
+    ];
+    let required = [
+        ("AWS_REGION", "AWS region (e.g. us-west-2)"),
+        ("GATEWAY_DOMAIN", "Gateway domain (e.g. claw.example.com)"),
+    ];
+    let mut errors = Vec::new();
+    for (key, desc) in &required {
+        match std::env::var(key) {
+            Ok(val) if KNOWN_PLACEHOLDERS.contains(&val.as_str()) => {
+                errors.push(format!("  {key}={val} (placeholder — run setup.sh or sed to inject real values)"));
+            }
+            Ok(val) if val.is_empty() => {
+                errors.push(format!("  {key} is empty — expected: {desc}"));
+            }
+            Err(_) => {
+                errors.push(format!("  {key} not set — expected: {desc}"));
+            }
+            Ok(_) => {} // valid
+        }
+    }
+    if !errors.is_empty() {
+        error!("Fatal: Operator env vars contain placeholders or are missing.\n\
+               This means setup.sh sed substitution did not run.\n\
+               Fix: re-run setup.sh or manually set env vars.\n\n{}", errors.join("\n"));
+        std::process::exit(1);
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // --version flag: print version and exit (no K8s connection needed)
@@ -33,6 +67,8 @@ async fn main() -> anyhow::Result<()> {
 
     telemetry::init();
     info!("Starting tenant-operator v{}", env!("CARGO_PKG_VERSION"));
+
+    validate_env();
 
     let state = State::default();
     let controller = controller::run(state.clone());
