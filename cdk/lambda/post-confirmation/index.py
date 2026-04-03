@@ -129,8 +129,11 @@ def _resolve_tenant_name(base_name, email):
     endpoint, ssl_ctx, bearer = _get_eks_context()
     appset = _k8s_get(endpoint, ssl_ctx, bearer,
         f"{endpoint}/apis/argoproj.io/v1alpha1/namespaces/argocd/applicationsets/openclaw-tenants")
-    elements = appset.get('spec', {}).get('generators', [{}])[0].get('list', {}).get('elements', []) if appset else []
-    taken = {e['name']: e.get('email', '') for e in elements}
+    try:
+        elements = appset.get('spec', {}).get('generators', [{}])[0].get('list', {}).get('elements', []) if appset else []
+        taken = {e['name']: e.get('email', '') for e in elements}
+    except (KeyError, IndexError, TypeError):
+        taken = {}
 
     for suffix in ['', '-2', '-3', '-4', '-5', '-6', '-7', '-8', '-9']:
         candidate = f'{base_name}{suffix}'[:63]
