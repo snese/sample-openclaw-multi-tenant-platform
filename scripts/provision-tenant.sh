@@ -85,13 +85,18 @@ aws cognito-idp admin-update-user-attributes \
 # Step 4: Add tenant to ApplicationSet
 echo "[4/6] Adding tenant to ApplicationSet..."
 APPSET=$(kubectl get applicationset openclaw-tenants -n argocd -o json)
-UPDATED=$(echo "$APPSET" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-elements = d['spec']['generators'][0]['list']['elements']
-if not any(e.get('name') == '${TENANT}' for e in elements):
-    elements.append({'name': '${TENANT}', 'email': '${EMAIL}'})
-json.dump(d, sys.stdout)
+UPDATED=$(echo "$APPSET" | TENANT="$TENANT" EMAIL="$EMAIL" python3 -c "
+import json, sys, os
+try:
+    d = json.load(sys.stdin)
+    elements = d['spec']['generators'][0]['list']['elements']
+    t, e = os.environ['TENANT'], os.environ['EMAIL']
+    if not any(el.get('name') == t for el in elements):
+        elements.append({'name': t, 'email': e})
+    json.dump(d, sys.stdout)
+except (KeyError, IndexError, TypeError) as err:
+    print(f'ERROR: ApplicationSet has invalid structure: {err}', file=sys.stderr)
+    sys.exit(1)
 ")
 echo "$UPDATED" | kubectl apply -f - >/dev/null
 

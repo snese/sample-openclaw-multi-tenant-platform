@@ -24,7 +24,7 @@ else
   exit 1
 fi
 
-for var_name in DOMAIN GITHUB_OWNER GITHUB_REPO; do
+for var_name in DOMAIN GITHUB_OWNER GITHUB_REPO COGNITO_POOL_ARN COGNITO_CLIENT_ID COGNITO_DOMAIN; do
   val="${!var_name}"
   if [[ -z "$val" ]]; then
     echo "Error: $var_name is empty in cdk.json."

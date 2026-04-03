@@ -131,7 +131,7 @@ def _resolve_tenant_name(base_name, email):
         f"{endpoint}/apis/argoproj.io/v1alpha1/namespaces/argocd/applicationsets/openclaw-tenants")
     try:
         elements = appset.get('spec', {}).get('generators', [{}])[0].get('list', {}).get('elements', []) if appset else []
-        taken = {e['name']: e.get('email', '') for e in elements}
+        taken = {e['name']: e.get('email', '') for e in elements if 'name' in e}
     except (KeyError, IndexError, TypeError):
         taken = {}
 
