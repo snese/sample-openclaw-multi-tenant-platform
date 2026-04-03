@@ -158,7 +158,10 @@ def add_tenant_to_applicationset(tenant, email):
             return
 
         elements.append({'name': tenant, 'email': email})
-        appset['spec']['generators'][0]['list']['elements'] = elements
+        try:
+            appset['spec']['generators'][0]['list']['elements'] = elements
+        except (KeyError, IndexError, TypeError) as e:
+            raise Exception(f'ApplicationSet has unexpected structure: {e}')
 
         # PUT with resourceVersion for optimistic locking
         _validate_url(url)

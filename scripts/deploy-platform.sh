@@ -25,7 +25,7 @@ else
 fi
 
 for var_name in DOMAIN GITHUB_OWNER GITHUB_REPO; do
-  eval val=\$$var_name
+  val="${!var_name}"
   if [[ -z "$val" ]]; then
     echo "Error: $var_name is empty in cdk.json."
     exit 1
