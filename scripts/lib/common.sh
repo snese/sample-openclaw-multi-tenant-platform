@@ -7,6 +7,15 @@ set -euo pipefail
 REGION="${REGION:-$(aws configure get region 2>/dev/null || echo "${AWS_DEFAULT_REGION:-us-west-2}")}"
 STACK="${STACK:-OpenClawEksStack}"
 
+# Project name — read from cdk.json if available, else default
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)"
+if [[ -f "${_SCRIPT_DIR}/cdk/cdk.json" ]]; then
+  PROJECT="${PROJECT:-$(node -e "console.log(require('${_SCRIPT_DIR}/cdk/cdk.json').context.projectName || 'openclaw')" 2>/dev/null || echo 'openclaw')}"
+else
+  PROJECT="${PROJECT:-openclaw}"
+fi
+CLUSTER="${CLUSTER:-${PROJECT}-cluster}"
+
 # Extract CloudFormation stack output by key
 get_output() {
   aws cloudformation describe-stacks \
@@ -52,7 +61,7 @@ ensure_idempotent() {
 require_cluster() {
   if ! kubectl cluster-info &>/dev/null; then
     log_error "Cannot connect to Kubernetes cluster."
-    log_error "Run: aws eks update-kubeconfig --region <region> --name openclaw-cluster"
+    log_error "Run: aws eks update-kubeconfig --region <region> --name ${CLUSTER}"
     exit 1
   fi
 }

@@ -24,6 +24,7 @@ echo "==> Reading config from cdk.json"
 CDK_JSON="cdk/cdk.json"
 if [[ -f "$CDK_JSON" ]]; then
   DOMAIN=$(node -e "console.log(require('./$CDK_JSON').context.zoneName || '')")
+  PROJECT=$(node -e "console.log(require('./$CDK_JSON').context.projectName || 'openclaw')")
   GITHUB_OWNER=$(node -e "console.log(require('./$CDK_JSON').context.githubOwner || '')")
   GITHUB_REPO=$(node -e "console.log(require('./$CDK_JSON').context.githubRepo || '')")
   COGNITO_POOL_ARN=$(node -e "const c=require('./$CDK_JSON').context; const id=c.cognitoPoolId||''; const r='${REGION}'; const a=c.accountId||'${ACCOUNT}'; console.log(id ? 'arn:aws:cognito-idp:'+r+':'+a+':userpool/'+id : '')")
@@ -52,18 +53,19 @@ sed \
   -e "s|\"COGNITO_CLIENT_ID\"|\"${COGNITO_CLIENT_ID}\"|g" \
   -e "s|\"COGNITO_DOMAIN\"|\"${COGNITO_DOMAIN}\"|g" \
   -e "s|\"BEDROCK_REGION\"|\"${REGION}\"|g" \
+  -e "s|PROJECT_NAME|${PROJECT}|g" \
   helm/applicationset.yaml | kubectl apply -f -
 
 echo "==> Installing Gateway API CRDs (required by ALB Controller)"
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
 kubectl wait --for=condition=Established crd/gatewayclasses.gateway.networking.k8s.io --timeout=30s || echo "  (CRDs already established)"
 
-echo "==> Ensuring openclaw-system namespace (with Pod Security Standards)"
+echo "==> Ensuring ${PROJECT}-system namespace (with Pod Security Standards)"
 kubectl apply -f - <<'NS'
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: openclaw-system
+  name: ${PROJECT}-system
   labels:
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/warn: restricted
@@ -81,12 +83,13 @@ fi
 sed \
   -e "s|\"DOMAIN\"|\"${DOMAIN}\"|g" \
   -e "s|\"CF_PREFIX_LIST_ID\"|\"${CF_PREFIX_LIST}\"|g" \
+  -e "s|PROJECT_NAME|${PROJECT}|g" \
   helm/gateway.yaml | kubectl apply -f -
 
 echo ""
 echo "=== Platform Deployed ==="
-echo "  ApplicationSet: openclaw-tenants (in argocd namespace)"
-echo "  Gateway: openclaw-gateway (in openclaw-system namespace)"
+echo "  ApplicationSet: ${PROJECT}-tenants (in argocd namespace)"
+echo "  Gateway: ${PROJECT}-gateway (in ${PROJECT}-system namespace)"
 echo ""
 echo "  Next: create a tenant with scripts/create-tenant.sh"
 echo "========================"

@@ -15,7 +15,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: openclaw-tenants
+  name: PROJECT_NAME-tenants
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-options: Delete=false
@@ -30,7 +30,7 @@ spec:
       name: "tenant-{{.name}}"
       labels:
         openclaw.io/tenant: "{{.name}}"
-        app.kubernetes.io/managed-by: openclaw-applicationset
+        app.kubernetes.io/managed-by: PROJECT_NAME-applicationset
     spec:
       project: default
       source:
@@ -56,8 +56,8 @@ spec:
             gateway:
               enabled: true
               domain: "DOMAIN"
-              gatewayName: openclaw-gateway
-              gatewayNamespace: openclaw-system
+              gatewayName: PROJECT_NAME-gateway
+              gatewayNamespace: PROJECT_NAME-system
             config:
               models:
                 bedrockDiscovery:
@@ -89,7 +89,7 @@ spec:
         managedNamespaceMetadata:
           labels:
             openclaw.io/tenant: "{{.name}}"
-            app.kubernetes.io/managed-by: openclaw-applicationset
+            app.kubernetes.io/managed-by: PROJECT_NAME-applicationset
             pod-security.kubernetes.io/enforce: restricted
             pod-security.kubernetes.io/warn: restricted
             pod-security.kubernetes.io/audit: restricted

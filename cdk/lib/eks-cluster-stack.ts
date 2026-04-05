@@ -53,6 +53,9 @@ export class EksClusterStack extends cdk.Stack {
       }
     }
 
+    // ── Project Name (configurable, used to derive all resource names) ─────
+    const projectName = (this.node.tryGetContext('projectName') as string) || 'openclaw';
+
     // ── VPC ─────────────────────────────────────────────────────────────────
     const vpc = new ec2.Vpc(this, 'Vpc', {
       maxAzs: 2,
@@ -75,7 +78,7 @@ export class EksClusterStack extends cdk.Stack {
       vpc,
       version: eks.KubernetesVersion.V1_35,
       defaultCapacity: 0,
-      clusterName: 'openclaw-cluster',
+      clusterName: `${projectName}-cluster`,
       authenticationMode: eks.AuthenticationMode.API_AND_CONFIG_MAP,
       kubectlLayer: new KubectlV35Layer(this, 'KubectlLayer'),
       clusterLogging: [
@@ -260,7 +263,7 @@ export class EksClusterStack extends cdk.Stack {
         apiVersion: 'v1',
         kind: 'Namespace',
         metadata: {
-          name: 'openclaw-system',
+          name: `${projectName}-system`,
           labels: {
             'pod-security.kubernetes.io/enforce': 'restricted',
             'pod-security.kubernetes.io/warn': 'restricted',
@@ -1034,6 +1037,7 @@ export class EksClusterStack extends cdk.Stack {
     });
 
     // ── Outputs ─────────────────────────────────────────────────────────────
+    new cdk.CfnOutput(this, 'ProjectName', { value: projectName });
     new cdk.CfnOutput(this, 'ClusterName', { value: cluster.clusterName });
     new cdk.CfnOutput(this, 'ClusterEndpoint', { value: cluster.clusterEndpoint });
     new cdk.CfnOutput(this, 'TenantRoleArn', { value: tenantRole.roleArn });

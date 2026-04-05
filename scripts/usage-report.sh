@@ -11,7 +11,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-LOG_GROUP="/aws/containerinsights/openclaw-cluster/application"
+LOG_GROUP="/aws/containerinsights/${CLUSTER}/application"
 START=$(date -d "${MONTH}-01" +%s 2>/dev/null || date -jf "%Y-%m-%d" "${MONTH}-01" +%s)
 END=$(date -d "${MONTH}-01 +1 month" +%s 2>/dev/null || date -v+1m -jf "%Y-%m-%d" "${MONTH}-01" +%s)
 

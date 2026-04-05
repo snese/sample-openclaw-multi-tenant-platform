@@ -222,6 +222,6 @@ fetchSecret: |
 # Gateway API (replaces Ingress for path-based routing)
 gateway:
   enabled: false
-  gatewayName: openclaw-gateway
-  gatewayNamespace: openclaw-system
+  gatewayName: ""  # Injected by ApplicationSet
+  gatewayNamespace: ""  # Injected by ApplicationSet
   domain: ""

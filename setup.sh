@@ -76,7 +76,7 @@ phase1_verify() {
 phase2_run() {
   echo "  Installing ArgoCD via Helm..."
   echo "  Configuring kubectl..."
-  aws eks update-kubeconfig --region "$(aws configure get region 2>/dev/null || echo us-west-2)" --name openclaw-cluster
+  aws eks update-kubeconfig --region "$(aws configure get region 2>/dev/null || echo us-west-2)" --name "${PROJECT:-openclaw}-cluster"
   bash scripts/setup-argocd.sh
 }
 phase2_verify() {
