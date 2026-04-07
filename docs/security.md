@@ -229,12 +229,12 @@ Designed to ensure tenant data survives pod restarts, scale-to-zero, and failure
 Records all Amazon Bedrock API calls for compliance and forensics.
 
 - Dedicated CloudTrail trail (`openclaw-bedrock-audit`) -- Amazon Bedrock events only
-- Logs stored in S3: `openclaw-audit-logs-{account}-{region}`
+- Logs stored in Amazon S3: `openclaw-audit-logs-{account}-{region}`
 - Athena database + table for SQL queries
 - CloudWatch Container Insights for pod-level metrics
 - Amazon EKS control plane logging: all 5 types
 
-**Managed by**: AWS CDK (CloudTrail + S3 in `eks-cluster-stack.ts`)
+**Managed by**: AWS CDK (CloudTrail + Amazon S3 in `eks-cluster-stack.ts`)
 
 ---
 

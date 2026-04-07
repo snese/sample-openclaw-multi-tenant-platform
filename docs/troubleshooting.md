@@ -221,4 +221,4 @@ aws eks delete-cluster --name openclaw-cluster
 
 ### Retained resources after `cdk destroy`
 
-Amazon EFS file systems and S3 error-page buckets are retained (data protection). They don't block redeployment but accumulate over multiple destroy/deploy cycles. See README "Cleanup" section for manual cleanup commands.
+Amazon EFS file systems and Amazon S3 error-page buckets are retained (data protection). They don't block redeployment but accumulate over multiple destroy/deploy cycles. See README "Cleanup" section for manual cleanup commands.
