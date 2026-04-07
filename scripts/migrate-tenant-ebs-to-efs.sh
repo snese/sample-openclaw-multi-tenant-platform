@@ -47,8 +47,7 @@ echo "  ✅ Old PVC Bound (storageClass: $(kubectl get pvc "${OLD_PVC}" -n "${NA
 
 # ── Step 3: Create temporary EFS PVC ─────────────────────────────────────
 echo "==> Creating temporary EFS PVC: ${NEW_PVC}"
-# nosemgrep: bash.lang.correctness.useless-cat
-cat <<EOF | kubectl apply -f -
+kubectl apply -f - <<EOF
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -74,8 +73,8 @@ kubectl delete job "${JOB_NAME}" -n "${NAMESPACE}" --ignore-not-found --wait 2>/
 
 # ── Step 5: Run migration job ────────────────────────────────────────────
 echo "==> Running migration job (cp + verify)"
-# nosemgrep: bash.lang.correctness.useless-cat
-cat <<'JOBEOF' | sed "s/\${OLD_PVC}/${OLD_PVC}/g; s/\${NEW_PVC}/${NEW_PVC}/g; s/\${JOB_NAME}/${JOB_NAME}/g; s/\${NAMESPACE}/${NAMESPACE}/g" | kubectl apply -f -
+_tmpjob=$(mktemp)
+cat <<'JOBEOF' > "$_tmpjob"
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -129,6 +128,9 @@ spec:
         persistentVolumeClaim:
           claimName: ${NEW_PVC}
 JOBEOF
+sed -i "s/\${OLD_PVC}/${OLD_PVC}/g; s/\${NEW_PVC}/${NEW_PVC}/g; s/\${JOB_NAME}/${JOB_NAME}/g; s/\${NAMESPACE}/${NAMESPACE}/g" "$_tmpjob"
+kubectl apply -f "$_tmpjob"
+rm -f "$_tmpjob"
 
 echo "  Waiting for job (timeout 5m)..."
 if ! kubectl wait --for=condition=complete job/"${JOB_NAME}" -n "${NAMESPACE}" --timeout=300s; then
