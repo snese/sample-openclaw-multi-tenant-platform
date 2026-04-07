@@ -44,12 +44,12 @@ Internet
 ```
 Amazon EKS Cluster
 |  Managed Node Group (Graviton ARM64) + Karpenter (arm64 spot)
-|  Add-ons: ALB Controller, EBS CSI, EFS CSI, Pod Identity, CloudWatch Insights
+|  Add-ons: ALB Controller, EBS CSI, Amazon EFS CSI, Pod Identity, CloudWatch Insights
 |  KEDA HTTP Add-on
 |
 +-- namespace: openclaw-{tenant}
 |   ApplicationSet-managed (ArgoCD):
-|     Namespace                      PVC (EFS)
+|     Namespace                      PVC (Amazon EFS)
 |     ArgoCD Application            ServiceAccount (Pod Identity)
 |     ReferenceGrant (keda ns)      Deployment + Service + ConfigMap
 |                                    HTTPRoute + TGC + NetworkPolicy + PDB + KEDA HSO
@@ -96,7 +96,7 @@ n# Ensure your AWS CLI default region matches your target deployment region:
 npx cdk deploy
 ```
 
-Creates: Amazon EKS cluster, VPC, IAM roles, Amazon EFS, AWS Lambda, S3, Amazon CloudFront, AWS WAF, CloudWatch, SNS (~15-20 min).
+Creates: Amazon EKS cluster, VPC, IAM roles, Amazon EFS, AWS Lambda, Amazon S3, Amazon CloudFront, AWS WAF, CloudWatch, SNS (~15-20 min).
 
 #### 3. Setup ArgoCD
 
@@ -148,8 +148,8 @@ Amazon Cognito triggers, CloudWatch alarms, audit logging, and usage tracking ar
 ./scripts/delete-tenant.sh <name>              # Delete (with confirmation)
 ./scripts/verify-tenant.sh <name>              # Health check
 ./scripts/check-all-tenants.sh                 # Check all tenants
-./scripts/backup-tenant.sh <name> <bucket>     # Backup to S3
-./scripts/restore-tenant.sh <name> <s3-path>   # Restore from S3
+./scripts/backup-tenant.sh <name> <bucket>     # Backup to Amazon S3
+./scripts/restore-tenant.sh <name> <s3-path>   # Restore from Amazon S3
 ./scripts/admin-list-tenants.sh                # List tenants + cost
 ```
 
