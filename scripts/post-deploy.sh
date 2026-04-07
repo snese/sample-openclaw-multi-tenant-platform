@@ -177,13 +177,15 @@ try:
 
     config['CacheBehaviors'] = {'Quantity': len(behaviors), 'Items': behaviors}
 
-    config['CustomErrorResponses'] = {
-        'Quantity': 2,
-        'Items': [
-            {'ErrorCode': 502, 'ResponsePagePath': '/error/503.html', 'ResponseCode': '503', 'ErrorCachingMinTTL': 5},
-            {'ErrorCode': 503, 'ResponsePagePath': '/error/503.html', 'ResponseCode': '503', 'ErrorCachingMinTTL': 5},
-        ]
-    }
+    # Merge custom error responses (preserve existing, upsert 502/503)
+    existing_errors = config.get('CustomErrorResponses', {}).get('Items', [])
+    error_codes_to_set = {502, 503}
+    merged = [e for e in existing_errors if e['ErrorCode'] not in error_codes_to_set]
+    merged.extend([
+        {'ErrorCode': 502, 'ResponsePagePath': '/error/503.html', 'ResponseCode': '503', 'ErrorCachingMinTTL': 5},
+        {'ErrorCode': 503, 'ResponsePagePath': '/error/503.html', 'ResponseCode': '503', 'ErrorCachingMinTTL': 5},
+    ])
+    config['CustomErrorResponses'] = {'Quantity': len(merged), 'Items': merged}
 
     config['HttpVersion'] = 'http2and3'
 
