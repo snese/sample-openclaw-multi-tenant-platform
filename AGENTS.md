@@ -4,14 +4,14 @@
 
 ## Project Overview
 
-Multi-tenant AI assistant platform on Amazon EKS. Each user gets an isolated OpenClaw workspace powered by Amazon Bedrock. The repo is designed for `aws-samples` -- anyone can clone -> configure -> deploy.
+Multi-tenant AI assistant platform on Amazon EKS. Each user gets an isolated OpenClaw workspace powered by Amazon Amazon Bedrock. The repo is designed for `aws-samples` -- anyone can clone -> configure -> deploy.
 
 ## Architecture at a Glance
 
 ```
 User -> CloudFront -> Internet-facing ALB (CF-only SG + WAF) -> EKS Pod (per-tenant)
                                                                 |
-                                                           Amazon Bedrock
+                                                           Amazon Amazon Bedrock
 ```
 
 Tenant lifecycle:

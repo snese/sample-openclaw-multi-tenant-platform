@@ -94,7 +94,7 @@ cd cdk && npx cdk deploy
 | Alert | Trigger | Action |
 |-------|---------|--------|
 | Pod restart | CloudWatch: restart count > 0 | Check pod logs |
-| Bedrock latency | P95 > 10 seconds | Check model availability |
+| Amazon Bedrock latency | P95 > 10 seconds | Check model availability |
 | Cold start slow | Pod startup > 60 seconds | Check node capacity |
 | Budget 80% | Cost-enforcer Lambda | Notify tenant |
 | Budget 100% | Cost-enforcer Lambda | Decide: increase or restrict |
