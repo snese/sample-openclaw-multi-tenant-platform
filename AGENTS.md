@@ -62,7 +62,7 @@ scripts/delete-tenant.sh  <- Removes tenant from ApplicationSet + cleanup
 scripts/provision-tenant.sh  <- Full tenant recovery when PostConfirmation AWS Lambda fails
 scripts/setup-argocd.sh  <- ArgoCD via Helm
 scripts/setup-keda.sh  <- KEDA + HTTP Add-on
-scripts/deploy-auth-ui.sh  <- Uploads auth-ui/ to S3, uses sed to inject config
+scripts/deploy-auth-ui.sh  <- Uploads auth-ui/ to Amazon S3, uses sed to inject config
 scripts/lib/preflight.sh  <- Pre-flight checks (tools, AWS, cdk.json)
 scripts/lib/generate-config.sh  <- Interactive cdk.json generator
 scripts/lib/common.sh  <- Shared helpers (require_cluster, get_output, log)
