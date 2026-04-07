@@ -28,7 +28,7 @@ TB7: ArgoCD ←→ Amazon EKS API        (ApplicationSet SSA, auto-sync prune+se
 |---|--------|----------|------------|
 | S1 | Attacker impersonates Amazon CloudFront to reach ALB | TB2 | ALB SG restricted to Amazon CloudFront prefix list (pl-82a045eb). AWS WAF is configured to validate X-Verify-Origin custom header |
 | S2 | Attacker guesses gateway token to access workspace | TB6 | Token is secrets.token_urlsafe(32) = 256-bit entropy. Stored in Secrets Manager, fetched on-demand via exec SecretRef |
-| S3 | Bot mass signup | TB6 | Pre-signup AWS Lambda: email domain allowlist + 5 signups/domain/hour rate limit. Optional AWS WAF Bot Control |
+| S-3 | Bot mass signup | TB6 | Pre-signup AWS Lambda: email domain allowlist + 5 signups/domain/hour rate limit. Optional AWS WAF Bot Control |
 | S4 | Cross-tenant identity spoofing | TB5 | Pod Identity per tenant → STS session with kubernetes-namespace tag → ABAC on Secrets Manager |
 
 ### Tampering
