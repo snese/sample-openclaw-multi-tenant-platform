@@ -83,15 +83,6 @@ EFS supports AWS Backup natively. For on-demand backup/restore:
 
 ## Migration from EBS
 
-For existing tenants on EBS (gp3):
-
-```bash
-kubectl scale deployment <tenant> -n openclaw-<tenant> --replicas=0
-./scripts/backup-tenant.sh <tenant> <s3-bucket>  # safety net
-./scripts/migrate-tenant-ebs-to-efs.sh <tenant>
-# ArgoCD auto-syncs new EFS PVC
-```
-
 ## Production: Per-Tenant Quota
 
 EFS has no per-access-point quota. For hard quota requirements:
