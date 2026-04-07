@@ -166,7 +166,7 @@ Amazon Cognito triggers, CloudWatch alarms, audit logging, and usage tracking ar
 | LLM | Amazon Bedrock via Pod Identity -- zero API keys |
 | Cost | Per-tenant monthly budget with per-model pricing |
 | Data | PVC persists across scale-to-zero (Amazon EFS, multi-AZ) |
-| Audit | CloudTrail + S3 + Athena + Amazon EKS control plane logging |
+| Audit | CloudTrail + Amazon S3 + Athena + Amazon EKS control plane logging |
 
 ## Cost
 
@@ -176,7 +176,7 @@ Amazon Cognito triggers, CloudWatch alarms, audit logging, and usage tracking ar
 | EC2 (Graviton + Karpenter spot) | ~$48 | ~$48-150 |
 | Amazon EFS (per actual usage) | ~$0.15 | ~$75 |
 | ALB + NAT (x2) + Amazon CloudFront + AWS WAF | ~$60 | ~$65 |
-| CloudWatch + AWS Lambda + S3 | ~$15 | ~$20 |
+| CloudWatch + AWS Lambda + Amazon S3 | ~$15 | ~$20 |
 | Amazon Bedrock | varies | varies |
 | **Total (infra)** | **~$198/mo** | **~$286-388/mo** |
 
@@ -232,7 +232,7 @@ cd cdk && npx cdk destroy OpenClawEksStack
 ./scripts/cleanup-test-resources.sh
 ```
 
-> **Retained resources**: Amazon EFS file systems and S3 error-page buckets use `removalPolicy: RETAIN` to protect tenant data. After `cdk destroy`, these remain in your account. To fully clean up:
+> **Retained resources**: Amazon EFS file systems and Amazon S3 error-page buckets use `removalPolicy: RETAIN` to protect tenant data. After `cdk destroy`, these remain in your account. To fully clean up:
 >
 > ```bash
 > # List retained Amazon EFS (check for tenant data before deleting)

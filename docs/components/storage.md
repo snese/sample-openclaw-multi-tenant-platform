@@ -7,7 +7,7 @@ Each tenant gets an EFS-backed PVC that persists across pod restarts, scale-to-z
 ## Storage Architecture
 
 ```
-EFS FileSystem (encrypted, elastic throughput)
+Amazon EFS FileSystem (encrypted, elastic throughput)
   ├─ /tenants/openclaw-alice/    ← Access Point (auto-created by CSI driver)
   ├─ /tenants/openclaw-bob/      ← Access Point
   └─ /tenants/openclaw-demo/     ← Access Point
@@ -24,8 +24,8 @@ Each AP enforces:
 ```yaml
 persistence:
   enabled: true
-  storageClass: "efs-sc"    # EFS dynamic provisioning
-  accessMode: ReadWriteMany  # EFS supports multi-AZ
+  storageClass: "efs-sc"    # Amazon EFS dynamic provisioning
+  accessMode: ReadWriteMany  # Amazon EFS supports multi-AZ
   size: 10Gi                 # EFS auto-scales; this is a K8s formality
 ```
 
