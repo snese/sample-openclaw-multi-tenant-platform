@@ -128,7 +128,7 @@ spec:
         persistentVolumeClaim:
           claimName: ${NEW_PVC}
 JOBEOF
-sed -i "s/\${OLD_PVC}/${OLD_PVC}/g; s/\${NEW_PVC}/${NEW_PVC}/g; s/\${JOB_NAME}/${JOB_NAME}/g; s/\${NAMESPACE}/${NAMESPACE}/g" "$_tmpjob"
+sed "s/\${OLD_PVC}/${OLD_PVC}/g; s/\${NEW_PVC}/${NEW_PVC}/g; s/\${JOB_NAME}/${JOB_NAME}/g; s/\${NAMESPACE}/${NAMESPACE}/g" "$_tmpjob" > "$_tmpjob.tmp" && mv "$_tmpjob.tmp" "$_tmpjob"
 kubectl apply -f "$_tmpjob"
 rm -f "$_tmpjob"
 
