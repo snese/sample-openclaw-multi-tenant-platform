@@ -44,8 +44,19 @@ if [ -f "${STATIC_DIR}/503.html" ]; then
   aws s3 cp "${STATIC_DIR}/503.html" "s3://${ERROR_BUCKET}/503.html" --content-type "text/html; charset=utf-8" --region "$REGION"
 fi
 
-# 4. Find CDK-managed CloudFront distribution (serves auth UI on DOMAIN)
-# Find the exact-match distribution (not wildcard *.domain)
+# 4. Create or find OAC for error pages S3 origin
+OAC_NAME="openclaw-error-pages"
+OAC_ID=$(aws cloudfront list-origin-access-controls \
+  --query "OriginAccessControlList.Items[?Name=='${OAC_NAME}'].Id" --output text 2>/dev/null)
+if [ -z "$OAC_ID" ]; then
+  echo "  -> Creating OAC for error pages"
+  OAC_ID=$(aws cloudfront create-origin-access-control \
+    --origin-access-control-config "{\"Name\":\"${OAC_NAME}\",\"SigningProtocol\":\"sigv4\",\"SigningBehavior\":\"always\",\"OriginAccessControlOriginType\":\"s3\"}" \
+    --query 'OriginAccessControl.Id' --output text)
+fi
+echo "  OAC: $OAC_ID"
+
+# 5. Find CDK-managed CloudFront distribution (serves auth UI on DOMAIN)
 CF_ID=$(aws cloudfront list-distributions \
   --query "DistributionList.Items[?Aliases.Items[0]=='${DOMAIN}'].Id" --output text 2>/dev/null | head -1)
 
@@ -62,129 +73,148 @@ if echo "$EXISTING_ORIGINS" | grep -q "alb"; then
   echo "  ALB origin already configured. Updating..."
 fi
 
-# 5. Add ALB origin + /t/* behavior to the existing CloudFront distribution
+# 6. Add ALB origin + /t/* behavior to the existing CloudFront distribution
 echo "  -> Adding ALB origin and /t/* behavior to CloudFront"
 
-# Get current config + ETag (required for update)
-aws cloudfront get-distribution-config --id "$CF_ID" > /tmp/cf-config-full.json
-ETAG=$(python3 -c "import json; print(json.load(open('/tmp/cf-config-full.json'))['ETag'])")
-python3 -c "
+# Retry loop for ETag-based optimistic concurrency
+MAX_RETRIES=3
+for attempt in $(seq 1 $MAX_RETRIES); do
+  aws cloudfront get-distribution-config --id "$CF_ID" > /tmp/cf-config-full.json
+  ETAG=$(python3 -c "import json; print(json.load(open('/tmp/cf-config-full.json'))['ETag'])")
+
+  python3 -c "
 import json
+import sys
 
-with open('/tmp/cf-config-full.json') as f:
-    full = json.load(f)
-config = full['DistributionConfig']
+try:
+    with open('/tmp/cf-config-full.json') as f:
+        full = json.load(f)
+    config = full['DistributionConfig']
 
-alb_dns = '${ALB_DNS}'
-error_bucket = '${ERROR_BUCKET}'
-region = '${REGION}'
+    alb_dns = '${ALB_DNS}'
+    error_bucket = '${ERROR_BUCKET}'
+    region = '${REGION}'
+    oac_id = '${OAC_ID}'
 
-# Add ALB origin if not present
-origins = config['Origins']['Items']
-alb_origin_ids = [o['Id'] for o in origins if o['Id'] == 'alb']
-if not alb_origin_ids:
-    origins.append({
-        'Id': 'alb',
-        'DomainName': alb_dns,
-        'OriginPath': '',
-        'CustomOriginConfig': {
-            'HTTPPort': 80,
-            'HTTPSPort': 443,
-            'OriginProtocolPolicy': 'https-only',
-            'OriginKeepaliveTimeout': 5,
-            'OriginReadTimeout': 60,
-            'OriginSslProtocols': {'Quantity': 1, 'Items': ['TLSv1.2']}
-        },
-        'CustomHeaders': {'Quantity': 0, 'Items': []},
-        'OriginShield': {'Enabled': False},
-        'ConnectionAttempts': 3,
-        'ConnectionTimeout': 10,
-    })
-else:
-    # Update existing ALB origin DNS
-    for o in origins:
-        if o['Id'] == 'alb':
-            o['DomainName'] = alb_dns
-
-# Add error-pages origin if not present
-error_origin_ids = [o['Id'] for o in origins if o['Id'] == 'error-pages']
-if not error_origin_ids:
-    origins.append({
-        'Id': 'error-pages',
-        'DomainName': f'{error_bucket}.s3.{region}.amazonaws.com',
-        'OriginPath': '',
-        'S3OriginConfig': {'OriginAccessIdentity': ''},
-        'CustomHeaders': {'Quantity': 0, 'Items': []},
-        'OriginShield': {'Enabled': False},
-        'ConnectionAttempts': 3,
-        'ConnectionTimeout': 10,
-    })
-
-config['Origins']['Quantity'] = len(origins)
-
-# Add /t/* and /error/* behaviors if not present
-behaviors = config.get('CacheBehaviors', {}).get('Items', [])
-
-def make_behavior(path, origin_id, methods_all=False):
-    b = {
-        'PathPattern': path,
-        'TargetOriginId': origin_id,
-        'ViewerProtocolPolicy': 'redirect-to-https',
-        'Compress': True,
-        'SmoothStreaming': False,
-        'FieldLevelEncryptionId': '',
-        'LambdaFunctionAssociations': {'Quantity': 0, 'Items': []},
-        'FunctionAssociations': {'Quantity': 0, 'Items': []},
-    }
-    if methods_all:
-        b['AllowedMethods'] = {
-            'Quantity': 7,
-            'Items': ['GET','HEAD','OPTIONS','PUT','POST','PATCH','DELETE'],
-            'CachedMethods': {'Quantity': 2, 'Items': ['GET','HEAD']}
-        }
-        # CachingDisabled + AllViewerExceptHostHeader
-        b['CachePolicyId'] = '4135ea2d-6df8-44a3-9df3-4b5a84be39ad'
-        b['OriginRequestPolicyId'] = '216adef6-5c7f-47e4-b989-5492eafa07d3'
+    # Add ALB origin if not present
+    origins = config['Origins']['Items']
+    alb_origin_ids = [o['Id'] for o in origins if o['Id'] == 'alb']
+    if not alb_origin_ids:
+        origins.append({
+            'Id': 'alb',
+            'DomainName': alb_dns,
+            'OriginPath': '',
+            'CustomOriginConfig': {
+                'HTTPPort': 80,
+                'HTTPSPort': 443,
+                'OriginProtocolPolicy': 'https-only',
+                'OriginKeepaliveTimeout': 5,
+                'OriginReadTimeout': 60,
+                'OriginSslProtocols': {'Quantity': 1, 'Items': ['TLSv1.2']}
+            },
+            'CustomHeaders': {'Quantity': 0, 'Items': []},
+            'OriginShield': {'Enabled': False},
+            'ConnectionAttempts': 3,
+            'ConnectionTimeout': 10,
+        })
     else:
-        b['AllowedMethods'] = {
-            'Quantity': 2,
-            'Items': ['GET','HEAD'],
-            'CachedMethods': {'Quantity': 2, 'Items': ['GET','HEAD']}
+        for o in origins:
+            if o['Id'] == 'alb':
+                o['DomainName'] = alb_dns
+
+    # Add error-pages origin with OAC (not empty OAI)
+    error_origin_ids = [o['Id'] for o in origins if o['Id'] == 'error-pages']
+    if not error_origin_ids:
+        origins.append({
+            'Id': 'error-pages',
+            'DomainName': f'{error_bucket}.s3.{region}.amazonaws.com',
+            'OriginPath': '',
+            'S3OriginConfig': {'OriginAccessIdentity': ''},
+            'OriginAccessControlId': oac_id,
+            'CustomHeaders': {'Quantity': 0, 'Items': []},
+            'OriginShield': {'Enabled': False},
+            'ConnectionAttempts': 3,
+            'ConnectionTimeout': 10,
+        })
+
+    config['Origins']['Quantity'] = len(origins)
+
+    # Add /t/* and /error/* behaviors if not present
+    behaviors = config.get('CacheBehaviors', {}).get('Items', [])
+
+    def make_behavior(path, origin_id, methods_all=False):
+        b = {
+            'PathPattern': path,
+            'TargetOriginId': origin_id,
+            'ViewerProtocolPolicy': 'redirect-to-https',
+            'Compress': True,
+            'SmoothStreaming': False,
+            'FieldLevelEncryptionId': '',
+            'LambdaFunctionAssociations': {'Quantity': 0, 'Items': []},
+            'FunctionAssociations': {'Quantity': 0, 'Items': []},
         }
-        b['CachePolicyId'] = '658327ea-f89d-4fab-a63d-7e88639e58f6'
-    return b
+        if methods_all:
+            b['AllowedMethods'] = {
+                'Quantity': 7,
+                'Items': ['GET','HEAD','OPTIONS','PUT','POST','PATCH','DELETE'],
+                'CachedMethods': {'Quantity': 2, 'Items': ['GET','HEAD']}
+            }
+            b['CachePolicyId'] = '4135ea2d-6df8-44a3-9df3-4b5a84be39ad'
+            b['OriginRequestPolicyId'] = '216adef6-5c7f-47e4-b989-5492eafa07d3'
+        else:
+            b['AllowedMethods'] = {
+                'Quantity': 2,
+                'Items': ['GET','HEAD'],
+                'CachedMethods': {'Quantity': 2, 'Items': ['GET','HEAD']}
+            }
+            b['CachePolicyId'] = '658327ea-f89d-4fab-a63d-7e88639e58f6'
+        return b
 
-if not any(b['PathPattern'] == '/t/*' for b in behaviors):
-    behaviors.append(make_behavior('/t/*', 'alb', methods_all=True))
-if not any(b['PathPattern'] == '/error/*' for b in behaviors):
-    behaviors.append(make_behavior('/error/*', 'error-pages', methods_all=False))
+    if not any(b['PathPattern'] == '/t/*' for b in behaviors):
+        behaviors.append(make_behavior('/t/*', 'alb', methods_all=True))
+    if not any(b['PathPattern'] == '/error/*' for b in behaviors):
+        behaviors.append(make_behavior('/error/*', 'error-pages', methods_all=False))
 
-config['CacheBehaviors'] = {'Quantity': len(behaviors), 'Items': behaviors}
+    config['CacheBehaviors'] = {'Quantity': len(behaviors), 'Items': behaviors}
 
-# Custom error responses for 502/503
-config['CustomErrorResponses'] = {
-    'Quantity': 2,
-    'Items': [
-        {'ErrorCode': 502, 'ResponsePagePath': '/error/503.html', 'ResponseCode': '503', 'ErrorCachingMinTTL': 5},
-        {'ErrorCode': 503, 'ResponsePagePath': '/error/503.html', 'ResponseCode': '503', 'ErrorCachingMinTTL': 5},
-    ]
-}
+    config['CustomErrorResponses'] = {
+        'Quantity': 2,
+        'Items': [
+            {'ErrorCode': 502, 'ResponsePagePath': '/error/503.html', 'ResponseCode': '503', 'ErrorCachingMinTTL': 5},
+            {'ErrorCode': 503, 'ResponsePagePath': '/error/503.html', 'ResponseCode': '503', 'ErrorCachingMinTTL': 5},
+        ]
+    }
 
-config['HttpVersion'] = 'http2and3'
+    config['HttpVersion'] = 'http2and3'
 
-with open('/tmp/cf-config-update.json', 'w') as f:
-    json.dump(config, f)
+    with open('/tmp/cf-config-update.json', 'w') as f:
+        json.dump(config, f)
+
+except Exception as e:
+    print(f'Error modifying CloudFront config: {e}', file=sys.stderr)
+    sys.exit(1)
 "
 
-aws cloudfront update-distribution --id "$CF_ID" \
-  --if-match "$ETAG" \
-  --distribution-config file:///tmp/cf-config-update.json \
-  --query 'Distribution.{Status:Status,DomainName:DomainName}' --output json
-rm -f /tmp/cf-config-full.json /tmp/cf-config-update.json
+  if aws cloudfront update-distribution --id "$CF_ID" \
+    --if-match "$ETAG" \
+    --distribution-config file:///tmp/cf-config-update.json \
+    --query 'Distribution.{Status:Status,DomainName:DomainName}' --output json 2>/tmp/cf-update-error.log; then
+    break
+  fi
+
+  if [ "$attempt" -eq "$MAX_RETRIES" ]; then
+    log_error "CloudFront update failed after $MAX_RETRIES attempts"
+    cat /tmp/cf-update-error.log >&2
+    exit 1
+  fi
+  echo "  Retrying CloudFront update (attempt $((attempt+1))/$MAX_RETRIES)..."
+  sleep 2
+done
+rm -f /tmp/cf-config-full.json /tmp/cf-config-update.json /tmp/cf-update-error.log
 
 echo "  CloudFront updated (deploying ~3-5 min)"
 
-# 6. Set bucket policy for error pages
+# 7. Set bucket policy for error pages (OAC requires explicit bucket policy)
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 aws s3api put-bucket-policy --bucket "$ERROR_BUCKET" --policy "{
   \"Version\": \"2012-10-17\",
@@ -197,7 +227,7 @@ aws s3api put-bucket-policy --bucket "$ERROR_BUCKET" --policy "{
   }]
 }" --region "$REGION"
 
-# 7. Ensure Route53 points to this CloudFront
+# 8. Ensure Route53 points to this CloudFront
 CF_DOMAIN=$(aws cloudfront get-distribution --id "$CF_ID" --query 'Distribution.DomainName' --output text)
 ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name "$DOMAIN" --query "HostedZones[0].Id" --output text | sed 's|/hostedzone/||')
 echo "  -> Updating Route53 ${DOMAIN} -> $CF_DOMAIN"
