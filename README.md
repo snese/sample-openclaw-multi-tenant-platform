@@ -225,10 +225,10 @@ done
 
 # 2. Amazon CloudFront ALB origin and Route53 are cleaned up by cdk destroy
 
-# 3. Destroy CDK stack
+# 3. Destroy AWS CDK stack
 cd cdk && npx cdk destroy OpenClawEksStack
 
-# 4. Clean up retained resources (not deleted by CDK — data protection)
+# 4. Clean up retained resources (not deleted by AWS CDK — data protection)
 ./scripts/cleanup-test-resources.sh
 ```
 
@@ -249,13 +249,13 @@ cd cdk && npx cdk destroy OpenClawEksStack
 After pulling new changes (`git pull`), update the deployed components:
 
 ```bash
-# 1. Infrastructure + Lambda code + Auth UI (CDK deploys all three)
+# 1. Infrastructure + AWS Lambda code + Auth UI (AWS CDK deploys all three)
 cd cdk && npx cdk deploy OpenClawEksStack
 
 # 2. Re-apply platform manifests
 bash scripts/deploy-platform.sh
 
-# 3. Auth UI (if you use deploy-auth-ui.sh instead of CDK BucketDeployment)
+# 3. Auth UI (if you use deploy-auth-ui.sh instead of AWS CDK BucketDeployment)
 bash scripts/deploy-auth-ui.sh
 ```
 

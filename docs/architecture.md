@@ -24,7 +24,7 @@ Path-based routing via Gateway API: `claw.example.com/t/<tenant>/` -- one domain
 ## Tenant Lifecycle
 
 ```
-Cognito SignUp
+Amazon Cognito SignUp
   -> Pre-signup Lambda (email domain gate)
   -> Post-confirmation Lambda (creates ApplicationSet element)
   -> ApplicationSet generates Applications via SSA:
@@ -67,7 +67,7 @@ The ArgoCD Application is created with `fullnameOverride={tenant}`, auto-sync en
 ## Amazon EKS Cluster
 
 ```
-EKS Cluster (v1.35)
+Amazon EKS Cluster (v1.35)
 |  Managed Node Group (Graviton ARM64 t4g.medium) + Karpenter (arm64 spot)
 |  Add-ons: ALB Controller, EBS CSI, EFS CSI, Pod Identity, CloudWatch Insights
 |  KEDA HTTP Add-on
@@ -84,7 +84,7 @@ EKS Cluster (v1.35)
 |   +-- ApplicationSet (ArgoCD generator)
 |
 +-- namespace: argocd
-|   +-- ArgoCD (EKS add-on)
+|   +-- ArgoCD (Amazon EKS add-on)
 |   +-- ArgoCD Application per tenant
 ```
 
