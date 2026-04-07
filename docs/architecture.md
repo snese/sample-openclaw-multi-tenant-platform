@@ -74,7 +74,7 @@ Amazon EKS Cluster (v1.35)
 |
 +-- namespace: openclaw-{tenant}
 |   All managed by ArgoCD (Helm chart):
-|     Namespace                      PVC (EFS)
+|     Namespace                      PVC (Amazon EFS)
 |     ArgoCD Application            ServiceAccount (Pod Identity)
 |     ReferenceGrant (in keda ns)   Deployment + Service + ConfigMap
 |                                    HTTPRoute + TGC + NetworkPolicy

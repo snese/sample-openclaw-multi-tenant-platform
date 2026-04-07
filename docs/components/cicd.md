@@ -57,4 +57,4 @@ Sets up CloudTrail + Amazon S3 + Athena for Amazon Bedrock API audit.
 |---|---|
 | `.github/workflows/ci.yml` | GitHub Actions CI pipeline |
 | `helm/charts/openclaw-platform/values.yaml` | Image tag and chart defaults |
-| `scripts/deploy-auth-ui.sh` | S3 + Amazon CloudFront auth UI deployment |
+| `scripts/deploy-auth-ui.sh` | Amazon S3 + Amazon CloudFront auth UI deployment |

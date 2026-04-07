@@ -74,10 +74,10 @@ Typical tenant: ~500MB actual usage → ~$0.15/mo (vs $0.80/mo with EBS 10Gi).
 Amazon EFS supports AWS Backup natively. For on-demand backup/restore:
 
 ```bash
-# Backup tenant data to S3
+# Backup tenant data to Amazon S3
 ./scripts/backup-tenant.sh <tenant-name> <s3-bucket>
 
-# Restore from S3
+# Restore from Amazon S3
 ./scripts/restore-tenant.sh <tenant-name> s3://<bucket>/backups/<tenant>/<file>.tar.gz
 ```
 
