@@ -29,6 +29,8 @@ SERVICE_NAMES=(
   "Bedrock:Amazon Bedrock:bedrock-|Bedrock-LLM|/bedrock|amazon-bedrock"
   "WAF:AWS WAF:WafAcl|wafv2|WAF->"
   "EKS:Amazon EKS:aws-eks|eks\.|/eks/|EKS-|badge|logo"
+  "S3:Amazon S3:s3\.|/s3/|s3:|S3-|s3api|s3deploy|s3bucket"
+  "EFS:Amazon EFS:efs\.|/efs/|EFS-|EfsCsi|EfsStorage|EfsMountTarget|EfsSecurityGroup|EfsFileSystem"
   "CloudFront:Amazon CloudFront:cloudfront\.|CloudFrontCertificate|CloudFrontWebDistribution|CloudFront-|cloudfront:"
   "Cognito:Amazon Cognito:cognito-|cognito\.|/cognito/|CognitoPool|CognitoClient|CognitoDomain|CognitoTriggers|CognitoCustom|CognitoInvoke"
   "Lambda:AWS Lambda:lambda\.|/lambda/|LambdaConfig|LambdaFunction|lambda:|Lambda-"

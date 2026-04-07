@@ -79,14 +79,14 @@ All prose (docs, comments, HTML, commit messages) must use full AWS service name
 
 | Short | Full Name | When to use short |
 |-------|-----------|-------------------|
-| Amazon Bedrock | Amazon Bedrock | Code identifiers, URLs, CLI commands |
-| Amazon EKS | Amazon EKS | Code identifiers, URLs, CLI commands |
+| Bedrock | Amazon Bedrock | Code identifiers, URLs, CLI commands |
+| EKS | Amazon EKS | Code identifiers, URLs, CLI commands |
 | S3 | Amazon S3 | Code identifiers, URLs, CLI commands |
-| Amazon EFS | Amazon EFS | Code identifiers, URLs, CLI commands |
-| Amazon CloudFront | Amazon CloudFront | Code identifiers, URLs, CLI commands |
-| Amazon Cognito | Amazon Cognito | Code identifiers, URLs, CLI commands |
-| AWS Lambda | AWS Lambda | Code identifiers, URLs, CLI commands |
-| AWS CDK | AWS CDK | Code identifiers, URLs, CLI commands |
+| EFS | Amazon EFS | Code identifiers, URLs, CLI commands |
+| CloudFront | Amazon CloudFront | Code identifiers, URLs, CLI commands |
+| Cognito | Amazon Cognito | Code identifiers, URLs, CLI commands |
+| Lambda | AWS Lambda | Code identifiers, URLs, CLI commands |
+| CDK | AWS CDK | Code identifiers, URLs, CLI commands |
 | WAF | AWS WAF | Code identifiers, URLs, CLI commands |
 
 **Examples:**
