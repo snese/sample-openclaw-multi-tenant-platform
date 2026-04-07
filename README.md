@@ -238,7 +238,7 @@ cd cdk && npx cdk destroy OpenClawEksStack
 > # List retained Amazon EFS (check for tenant data before deleting)
 > aws efs describe-file-systems --query 'FileSystems[?contains(Name,`TenantEfs`)].FileSystemId' --output text
 >
-> # List retained S3 buckets
+> # List retained Amazon S3 buckets
 > aws s3api list-buckets --query 'Buckets[?contains(Name,`openclaweks`)].Name' --output text
 > ```
 >

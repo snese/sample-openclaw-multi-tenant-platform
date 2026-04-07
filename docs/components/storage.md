@@ -26,7 +26,7 @@ persistence:
   enabled: true
   storageClass: "efs-sc"    # Amazon EFS dynamic provisioning
   accessMode: ReadWriteMany  # Amazon EFS supports multi-AZ
-  size: 10Gi                 # EFS auto-scales; this is a K8s formality
+  size: 10Gi                 # Amazon EFS auto-scales; this is a K8s formality
 ```
 
 **StorageClass** (`efs-sc`, created by AWS CDK):

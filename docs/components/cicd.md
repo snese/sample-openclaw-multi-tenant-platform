@@ -41,7 +41,7 @@ For per-tenant image overrides, set `spec.image.tag` on the ApplicationSet eleme
 ./scripts/deploy-auth-ui.sh us-west-2
 ```
 
-Reads AWS CDK stack outputs, injects config into `auth-ui/*.html`, syncs to S3.
+Reads AWS CDK stack outputs, injects config into `auth-ui/*.html`, syncs to Amazon S3.
 
 ## Audit Logging
 
@@ -49,7 +49,7 @@ Reads AWS CDK stack outputs, injects config into `auth-ui/*.html`, syncs to S3.
 # Audit logging is managed by AWS CDK -- no manual script needed
 ```
 
-Sets up CloudTrail + S3 + Athena for Amazon Bedrock API audit.
+Sets up CloudTrail + Amazon S3 + Athena for Amazon Bedrock API audit.
 
 ## Files
 

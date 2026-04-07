@@ -16,7 +16,7 @@
 |  6. Secrets      exec SecretRef -- on-demand fetch, never persisted    |
 |  7. LLM          Amazon Bedrock via Pod Identity -- zero API keys             |
 |  8. Cost         Per-tenant budget enforcement + daily AWS Lambda scan     |
-|  9. Data         PVC persistence (EFS, multi-AZ) + AWS Backup  |
+|  9. Data         PVC persistence (Amazon EFS, multi-AZ) + AWS Backup  |
 | 10. Audit        CloudTrail -> S3 -> Athena (Amazon Bedrock-specific trail)   |
 +-----------------------------------------------------------------------+
 ```
