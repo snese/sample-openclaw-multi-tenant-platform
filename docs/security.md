@@ -303,7 +303,7 @@ For production deployments, consider the following enhancements:
 
 ### Infrastructure
 6. **AWS WAF Bot Control**: enable via `cdk deploy -c enableBotControl=true` (additional AWS WAF charges apply)
-7. **AWS WAF logging**: enable full request logging to S3 for forensics
+7. **AWS WAF logging**: enable full request logging to Amazon S3 for forensics
 8. **GuardDuty Amazon EKS Runtime Monitoring**: detect container-level threats
 9. **KMS CMK**: use customer-managed keys for EBS encryption and Secrets Manager
 10. **Secrets rotation**: enable Secrets Manager automatic rotation with a AWS Lambda rotator

@@ -92,7 +92,7 @@ Amazon EKS Cluster (v1.35)
 
 | Component | Technology | Purpose |
 |-----------|-----------|--------|
-| Infrastructure | AWS CDK (TypeScript) | VPC, Amazon EKS, IAM, AWS Lambda, S3, Amazon CloudFront, AWS WAF |
+| Infrastructure | AWS CDK (TypeScript) | VPC, Amazon EKS, IAM, AWS Lambda, Amazon S3, Amazon CloudFront, AWS WAF |
 | ApplicationSet | ArgoCD generator | Generates per-tenant Applications from list elements |
 | Helm chart | ArgoCD-synced | Source of truth for tenant workload resources |
 | Auth | Amazon Cognito + custom UI | Signup, login, email domain gate |
@@ -128,7 +128,7 @@ ArgoCD tracks sync status for each tenant Application:
 | LLM | Amazon Bedrock via Pod Identity -- zero API keys |
 | Cost | Per-tenant monthly budget with per-model pricing |
 | Data | PVC persists across scale-to-zero (Amazon EFS, multi-AZ) |
-| Audit | CloudTrail + S3 + Athena + Amazon EKS control plane logging |
+| Audit | CloudTrail + Amazon S3 + Athena + Amazon EKS control plane logging |
 
 ## Data Flow
 
